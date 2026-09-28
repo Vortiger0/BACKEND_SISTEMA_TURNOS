@@ -1,0 +1,149 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+enum Rol {
+  ADMIN
+  FUNCIONARIO
+  CIUDADANO
+
+}
+
+enum DiaSemana {
+  LUNES
+  MARTES
+  MIERCOLES
+  JUEVES
+  VIERNES
+  SABADO
+  DOMINGO
+}
+
+enum EstadoTurno {
+  ACTIVO
+  EN_ATENCION
+  FINALIZADO
+  CANCELADO
+  AUSENTE
+}
+
+model Usuario {
+  id Int @id @default(autoincrement())
+  nombreCompleto String
+  contrasena String
+  rol Rol
+
+  ciudadano Ciudadano?
+  funcionario Funcionario?
+  admin Admin?
+}
+
+model Ciudadano {
+  id Int @id
+  correo String @unique
+  correoVerificado Boolean @default(false)
+  ausenciasAcumuladas Int @default(0)
+  fechaUltimaAusencia DateTime?
+  suspendidoHasta DateTime?
+
+  // El id del ciudadano es el mismo que el id del usuario
+  usuario Usuario @relation(fields: [id], references: [id])
+
+  turnos Turno[]
+}
+
+model Funcionario {
+  id Int @id
+  nombreUsuario String @unique
+  numeroCaja Int
+  sucursalId Int
+
+  usuario Usuario @relation(fields: [id], references: [id])
+
+  sucursal Sucursal @relation(fields: [sucursalId], references: [id])
+
+  @@unique([sucursalId, numeroCaja])
+}
+
+model Admin {
+  id Int @id
+  nombreUsuario String @unique
+  sucursalId Int @unique
+
+  usuario Usuario @relation(fields: [id], references: [id])
+  sucursal Sucursal @relation(fields: [sucursalId], references: [id])
+
+}
+
+model Sucursal {
+  id Int @id @default(autoincrement())
+  nombre String
+  organismo String
+  direccion String
+  latitud Float
+  longitud Float
+  telefono String
+  margenCorte Int
+  umbralPocoOcupado Int
+  umbralOcupado Int
+  cantidadCajas Int
+  maxTurnosDia Int @default(100)
+
+  //relacion 1 a n con funcionario
+  // los corchetes indican que pueden haber varios funcionarios asociados a una sucursal
+  funcionarios Funcionario[]
+  //relacion 1 a 1 con admin
+  // el "?" indica que puede haber un admin asociado a la sucursal, pero no es obligatorio
+  admin Admin?
+
+  horarios Horario[]
+  excepciones Excepcion[]
+  turnos Turno[]
+
+}
+
+model Horario {
+  id Int @id @default(autoincrement())
+  diaSemana DiaSemana
+  atiende Boolean
+  horaDesde DateTime @db.Time
+  horaHasta DateTime @db.Time
+  sucursalId Int
+
+  sucursal Sucursal @relation(fields: [sucursalId], references: [id])
+@@unique([sucursalId, diaSemana])
+
+
+}
+
+model Excepcion {
+  id Int @id @default(autoincrement())
+  fecha DateTime @db.Date
+  sucursalId Int
+
+  sucursal Sucursal @relation(fields: [sucursalId], references: [id])
+
+}
+
+model Turno {
+  id Int @id @default(autoincrement())
+  numero Int
+  estado EstadoTurno
+  sucursalId Int
+  //el campo puede quedar null puesto que los turnos sacados desde máquina del local no tienen asociado un ciudadano
+  ciudadanoId Int?
+
+  sucursal Sucursal @relation(fields: [sucursalId], references: [id])
+  ciudadano Ciudadano? @relation(fields: [ciudadanoId], references: [id])
+
+}
