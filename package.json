@@ -5,7 +5,12 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "tsx watch src/index.ts"
+    "dev": "tsx watch src/index.ts",
+    "orm:migrate": "prisma migrate dev --name",
+    "orm:generate": "prisma generate",
+    "orm:deploy": "prisma migrate deploy",
+    "studio": "prisma studio",
+    "orm:pereza": "prisma migrate reset --force && pnpm orm:generate"
   },
   "keywords": [],
   "author": "",
@@ -28,6 +33,7 @@
   "dependencies": {
     "@prisma/adapter-mariadb": "^7.10.0",
     "@prisma/client": "^7.10.0",
+    "bcryptjs": "^3.0.3",
     "dotenv": "^18.0.3",
     "express": "^5.2.1"
   }

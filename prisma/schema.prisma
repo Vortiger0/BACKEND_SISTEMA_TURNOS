@@ -39,8 +39,8 @@ enum EstadoTurno {
 
 model Usuario {
   id Int @id @default(autoincrement())
-  nombreCompleto String
-  contrasena String
+  nombreCompleto String @db.VarChar(100)
+  contrasena String @db.VarChar(60)
   rol Rol
 
   ciudadano Ciudadano?
@@ -50,9 +50,10 @@ model Usuario {
 
 model Ciudadano {
   id Int @id
-  correo String @unique
+  correo String @unique @db.VarChar(255)
   correoVerificado Boolean @default(false)
   ausenciasAcumuladas Int @default(0)
+  //los dos campos de abajo pueden estar vacíos
   fechaUltimaAusencia DateTime?
   suspendidoHasta DateTime?
 
@@ -64,7 +65,7 @@ model Ciudadano {
 
 model Funcionario {
   id Int @id
-  nombreUsuario String @unique
+  nombreUsuario String @unique @db.VarChar(50)
   numeroCaja Int
   sucursalId Int
 
@@ -77,7 +78,7 @@ model Funcionario {
 
 model Admin {
   id Int @id
-  nombreUsuario String @unique
+  nombreUsuario String @unique @db.VarChar(50)
   sucursalId Int @unique
 
   usuario Usuario @relation(fields: [id], references: [id])
@@ -87,12 +88,13 @@ model Admin {
 
 model Sucursal {
   id Int @id @default(autoincrement())
-  nombre String
-  organismo String
-  direccion String
+  nombre String @db.VarChar(150)
+  organismo String @db.VarChar(100)
+  direccion String @db.VarChar(200)
   latitud Float
   longitud Float
-  telefono String
+  //telefono varchar para evitar el borrado de 0 en algunos números que inician por este
+  telefono String @db.VarChar(20)
   margenCorte Int
   umbralPocoOcupado Int
   umbralOcupado Int
@@ -119,6 +121,7 @@ model Horario {
   horaDesde DateTime @db.Time
   horaHasta DateTime @db.Time
   sucursalId Int
+  
 
   sucursal Sucursal @relation(fields: [sucursalId], references: [id])
 @@unique([sucursalId, diaSemana])
