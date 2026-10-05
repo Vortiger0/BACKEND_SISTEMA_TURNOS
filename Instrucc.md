@@ -9,6 +9,10 @@ Abrir el archivo .env recién creado y completar cada variable:
 Formato:
 DATABASE_URL="mysql://usuario:contraseña@localhost:3306/nombre_de_base"
 
+JWT_SECRET generarlo con:
+  node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
+
+
 3. Crear las tablas en tu base de datos
 
 pnpm orm:deploy
