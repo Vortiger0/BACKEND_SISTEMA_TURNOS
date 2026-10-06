@@ -102,3 +102,96 @@ export const verificarCorreo = async (req: Request, res: Response) => {
         `);
     }
 };
+
+const loginSchema = z.object({
+    identificador: z.string().min(1, "Ingresa tu correo o usuario"),
+    contrasena: z.string().min(1, "Ingresa tu contraseña"),
+})
+
+export const login = async (req: Request, res: Response) => {
+    //llega el pedido, y se validan la forma de los datos
+    const resultado = loginSchema.safeParse(req.body);
+    //se chequea que venga algo en identificador y contrasena, si falta alguno, corta con un error
+    if (!resultado.success){
+        return res.status(400).json({error: resultado.error.issues[0]?.message})
+
+    }
+   
+    const { identificador, contrasena } = resultado.data;
+    //si lo que escribió una persona tiene arroba quiere decir que se intentó logear como ciudadano, de lo contrario es un funcionario o admin (ingresa con usuario)
+    const esCorreo = identificador.includes("@");
+
+    
+    let correoVerificado = true;
+    let contrasenaHasheada;
+    let userId;
+    let rol;
+
+    //si es correo busca en ciudadano trayendo solo lo necesario (id, si verificó correo, contra hasheada y rol). No confundir aquí los true con un valor, es una sintaxis de prisma para indicar que se traiga ese dato.
+    if (esCorreo) {
+        const ciudadano = await prisma.ciudadano.findUnique({
+            where: { correo: identificador},
+            select: {
+                id: true,
+                correoVerificado: true,
+                usuario: { select: { contrasena: true, rol: true}},
+            }
+        });
+        if (!ciudadano){
+            return res.status(401).json({error: "Datos incorrectos"})
+        }
+        userId = ciudadano.id
+        correoVerificado = ciudadano.correoVerificado;
+        contrasenaHasheada = ciudadano.usuario.contrasena;
+        rol = ciudadano.usuario.rol;
+    } else{
+        //si no es correo busca primero en funcionario, si no lo encuentra busca en admin. Si ninguno de los dos tiene el nombre de usuario ingresado, corta con un mensaje de error
+        
+        const funcionario = await prisma.funcionario.findUnique({
+            where: { nombreUsuario: identificador },
+            select: { id: true, usuario: { select: { contrasena: true, rol: true}}}
+        })
+        const admin = funcionario 
+        ? null
+        : await prisma.admin.findUnique({
+            where: {nombreUsuario: identificador},
+            select: {id: true, usuario: { select: {contrasena: true, rol: true }}}
+        })
+    const cuenta = funcionario ?? admin;
+
+    if(!cuenta){
+        return res.status(401).json({ error: "Datos incorrectos"})
+    }
+    //en cualquiera de los casos, si encuentra a alguien guarda los datos en variables
+    // para luego usarlos en la comparación de contra y generación del token
+    userId = cuenta.id;
+    contrasenaHasheada = cuenta.usuario.contrasena;
+    rol = cuenta.usuario.rol;
+
+    }
+    //hashea la contraseña ingresada y la compara con el hash ya guardado
+    const contrasenaValida = await bcrypt.compare (contrasena, contrasenaHasheada);
+
+    if (!contrasenaValida) {
+        return res.status(401).json ({error: "Datos incorrectos"})
+    }
+    //chequea si falta verificar correo, esto solo bloquea a los ciudadanos que no lo tengan verificado, los admin y funcionarios se saltean esto al no tener un correo, traen correoVerificado en true por defecto.
+    if (!correoVerificado) {
+        return res.status(403).json ({ error: "Verifica tu correo antes de iniciar sesión"})
+    }
+
+    //genera el token de sesión con el id y rol de usuario
+    const token = jwt.sign(
+        { id: userId, rol},
+        config.jwtSecret,
+        { expiresIn: "2h"}
+    );
+
+    //responde con el token para que el frontend lo guarde y use después (para pruebas)
+    return res.status (200).json ({
+        mensaje: "Inicio de sesión exitoso",
+        token,
+        rol,
+    })
+
+}
