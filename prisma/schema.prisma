@@ -142,6 +142,10 @@ model Turno {
   id Int @id @default(autoincrement())
   numero Int
   estado EstadoTurno
+  //se usa para que turnos corresponden a hoy, es un campo que se completa solo al crear el turno, con la fecha/hora exacta del momento
+  creadoEn DateTime @default(now())
+  //se usa para saber el último numero llamado en la sucursal, al inicio del día aún no llama a nadie por lo que puede ser null
+  llamadoEn DateTime?
   sucursalId Int
   //el campo puede quedar null puesto que los turnos sacados desde máquina del local no tienen asociado un ciudadano
   ciudadanoId Int?
