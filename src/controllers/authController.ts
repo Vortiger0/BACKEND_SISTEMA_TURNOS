@@ -126,6 +126,7 @@ export const login = async (req: Request, res: Response) => {
     let contrasenaHasheada;
     let userId;
     let rol;
+    let nombreSucursal: string | null = null;
 
     //si es correo busca en ciudadano trayendo solo lo necesario (id, si verificó correo, contra hasheada y rol). No confundir aquí los true con un valor, es una sintaxis de prisma para indicar que se traiga ese dato.
     if (esCorreo) {
@@ -149,13 +150,15 @@ export const login = async (req: Request, res: Response) => {
         
         const funcionario = await prisma.funcionario.findUnique({
             where: { nombreUsuario: identificador },
-            select: { id: true, usuario: { select: { contrasena: true, rol: true}}}
+            select: { id: true, usuario: { select: { contrasena: true, rol: true}},
+                                sucursal:{ select: {nombre:true}}}
         })
         const admin = funcionario 
         ? null
         : await prisma.admin.findUnique({
             where: {nombreUsuario: identificador},
-            select: {id: true, usuario: { select: {contrasena: true, rol: true }}}
+            select: {id: true, usuario: { select: {contrasena: true, rol: true }},
+                                sucursal: {select:{nombre:true}}}
         })
     const cuenta = funcionario ?? admin;
 
@@ -167,6 +170,8 @@ export const login = async (req: Request, res: Response) => {
     userId = cuenta.id;
     contrasenaHasheada = cuenta.usuario.contrasena;
     rol = cuenta.usuario.rol;
+    nombreSucursal = cuenta.sucursal.nombre;
+
 
     }
     //hashea la contraseña ingresada y la compara con el hash ya guardado
@@ -192,6 +197,7 @@ export const login = async (req: Request, res: Response) => {
         mensaje: "Inicio de sesión exitoso",
         token,
         rol,
+        sucursal: nombreSucursal,
     })
 
 }
