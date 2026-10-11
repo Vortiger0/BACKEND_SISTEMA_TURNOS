@@ -2,6 +2,7 @@ import type {Request, Response} from "express";
 import { prisma } from "../prisma"
 import {z} from "zod";
 
+
 const sacarTurnoSchema = z.object({
     sucursalId: z.number().int().positive(),
 })
@@ -44,4 +45,127 @@ export const sacarTurno = async (req: Request, res: Response ) => {
     if(esExcepcion) {
         return res.status(400).json({error: "La sucursal no se encuentra disponible hoy para atención al público"})
     }
-}
+
+    //como parte de saber que estamos en horario de atención para sacar turno, necesitamos saber que día de la semana es hoy
+    //el bloque de arriba indicaba la fecha del calendario de hoy, con esto lo que hacemos es saber a que dia corresponde esa fecha exacta.
+    const diasSemana = [
+        "DOMINGO", "LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES", "SABADO"
+    ] as const;
+    
+    //devuelve un numero del 0 al 6, donde 0 es domingo, 1 es lunes, etc.
+    const diaActual = diasSemana[new Date().getDay()];
+
+
+    if (!diaActual) {
+        return res.status(500).json({error: "Error interno al calcular dia"})
+    }
+
+    //Busca para la sucursal concreta, la fila completa de Horario que corresponde
+    //al dia de hoy: trae si atiende ese día, y de cuándo a cuándo
+    const horarioHoy = await prisma.horario.findUnique({
+        where: {
+            sucursalId_diaSemana: {
+                sucursalId,
+                diaSemana: diaActual
+            }
+            
+        },
+    })
+
+    //cubre dos casos: que no exista ningun horario cargado para el día concreto (improbable pero no imposible)
+    //o que exista pero con atiende en false (por ejemplo los domingos)
+    if (!horarioHoy || !horarioHoy.atiende) {
+        return res.status(400).json({error: "La sucursal no atiende hoy"})
+    }
+
+    //convertimos cada hora a minutos desde la medianoche (ej. las 10:30 son 630 minutos)
+    //porque no se puede comparar una hora directamente como si fuera un número simple
+    const ahora = new Date()
+    const horaActual = ahora.getHours() * 60 + ahora.getMinutes()
+    
+    const desde = horarioHoy.horaDesde;
+    const horaDesdeMinutos = desde.getUTCHours() * 60 + desde.getUTCMinutes();
+
+    const hasta = horarioHoy.horaHasta;
+    const horaHastaMinutos = hasta.getUTCHours() * 60 + hasta.getUTCMinutes();
+
+    
+    //valida si la hora actual esté en el rango de atención, si la hora actual
+    //es menor que la hora en la que comienza a atender o es mayor a la hora en la que se deja de atender entonces estamos fuera de horario de atención
+    if (horaActual < horaDesdeMinutos || horaActual > horaHastaMinutos ) {
+        return res.status(400).json({error: "La sucursal está fuera de su horario de atención"})
+    }
+
+    //tope diario
+    const turnosHoy = await prisma.turno.count({
+        where: {
+            sucursalId,
+            creadoEn: {gte: hoy} //gte significa mayor o igual que, como "hoy" está con la hora en 00:00 todos los turnos creado desde la medianoche de hoy en adelante
+            //cuentan. basicamente esta pieza cuenta todos los turnos de hoy, dejando fuera a los de otros días.
+        }
+    })
+
+    //si la cantidad de hoy ya alcanzó o superó el tope configurado se rechaza
+    if (turnosHoy >= sucursal.maxTurnosDia ) {
+        return res.status(400).json({error: "No hay turnos disponibles en esta sucursal por hoy"})
+    }
+
+    //turno único por organismo y suspensión por inasistencia
+    //esta validacion es distinta ya que solo aplica a los que están logeados (no el totem que no tiene cuenta asociada). 
+    const ciudadanoId = req.usuario?.id;
+
+    if (ciudadanoId) {
+        const ciudadano = await prisma.ciudadano.findUnique({
+            where: {id: ciudadanoId},
+        })
+
+        if (!ciudadano) {
+        return res.status(404).json({error: "Ciudadano no encontrado"})
+        }
+        
+        //busca si hay una suspension y si la hay verifica que esa fecha de suspensión ya no haya pasado porque de lo contrario no debería bloquear nada
+        if(ciudadano.suspendidoHasta && ciudadano.suspendidoHasta > new Date()) {
+            return res.status(403).json({error:"Estás suspendido temporalmente por inasistencias"})
+        }
+        
+        //un ciudadano no puede tener dos turnos activos en el mismo organismo
+        //aquí se busca si el ciudadano concreto tiene algún turno activo o en atención en alguna sucursal del mismo organismo
+        //de la sucursal en la que intenta sacar un turno ahora
+        const turnoMismoOrganismo = await prisma.turno.findFirst({
+            where: {
+                ciudadanoId,
+                estado: {in: ["ACTIVO", "EN_ATENCION"]},
+                //mira si el organismo de la sucursal concreta coincide con el de la sucursal actual en la que se intenta sacar turno
+                sucursal: {organismo: sucursal.organismo}
+            }
+        });
+        if (turnoMismoOrganismo) {
+            return res.status(400).json({error: "Ya tenés un turno activo en este organismo "})
+        }
+    }
+ 
+    //obtiene el ultimo numero que salió en la sucursal
+    //si por ejemplo ya salió el 1 2 y 3 esto obtiene ese último número al ordenarlo de forma descendente (3, 2, 1)
+    const ultimoTurnoHoy = await prisma.turno.findFirst({
+        where: {
+            sucursalId,
+            creadoEn: {gte: hoy}
+        },
+        orderBy: { numero: "desc"},
+    })
+
+    //una vez obtiene ese número le suma uno para darle el número que será el que obtenga la persona que está sacando turno
+    const siguienteNumero = ultimoTurnoHoy ? ultimoTurnoHoy.numero + 1 : 1;
+
+
+    //crea la fila del turno y si corresponde, quien lo sacó. 
+    const turnoCreado = await prisma.turno.create({
+        data: {
+            numero: siguienteNumero,
+            estado: "ACTIVO",
+            sucursalId,
+            ciudadanoId: ciudadanoId ?? null,
+        }
+    })
+    return res.status(201).json(turnoCreado);
+}   

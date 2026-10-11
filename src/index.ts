@@ -3,6 +3,7 @@ import {config} from "./config"
 import {prisma} from "./prisma"
 import authRoutes from "./routes/authRoute"
 import sucursalRoutes from "./routes/sucursalesRoute";
+import turnoRoutes from "./routes/turnoRoute";
 
 const app = express();
 
@@ -10,6 +11,7 @@ app.use(express.json())
 
 app.use("/api/auth", authRoutes);
 app.use("/api/sucursales", sucursalRoutes);
+app.use("/api/turnos", turnoRoutes)
 
 app.get("/testeo", async (_req, res) => {
   const sucursales = await prisma.sucursal.count();

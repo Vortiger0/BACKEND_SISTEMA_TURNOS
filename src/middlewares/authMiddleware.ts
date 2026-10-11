@@ -1,7 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import { config } from "../config"
-import { error } from "node:console";
 
 //middleware para confirmar que el pedido venga con un token válido antes de dejarlo ir hacia la ruta que lo use
 export const verificarToken = (req: Request, res: Response, next: NextFunction) => {
@@ -47,3 +46,27 @@ export const verificarToken = (req: Request, res: Response, next: NextFunction) 
 
         };
     };
+
+    //otra alternativa del middlewware para que la falta del token no bloquee el pedido (para usarlo en el totem)
+    export const verificarTokenOpcional = (req: Request, res: Response, next: NextFunction) => {
+    const authHeader = req.headers.authorization; 
+
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return next();
+    }
+
+    const token = authHeader.split(" ")[1];
+
+    if(!token){
+        return next();
+    }
+
+    try {
+        const payload = jwt.verify(token, config.jwtSecret) as unknown as {id: number; rol: string};
+        req.usuario = payload;
+    } catch {
+
+    }
+    next()
+
+}
