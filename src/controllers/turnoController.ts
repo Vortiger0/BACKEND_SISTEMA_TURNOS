@@ -100,8 +100,9 @@ export const sacarTurno = async (req: Request, res: Response ) => {
     const turnosHoy = await prisma.turno.count({
         where: {
             sucursalId,
-            creadoEn: {gte: hoy} //gte significa mayor o igual que, como "hoy" está con la hora en 00:00 todos los turnos creado desde la medianoche de hoy en adelante
+            creadoEn: {gte: hoy}, //gte significa mayor o igual que, como "hoy" está con la hora en 00:00 todos los turnos creado desde la medianoche de hoy en adelante
             //cuentan. basicamente esta pieza cuenta todos los turnos de hoy, dejando fuera a los de otros días.
+            estado: {notIn: ["AUSENTE", "CANCELADO"]} //un turno cancelado o ausente nunca se usa, así que se excluye del conteo
         }
     })
 
@@ -169,3 +170,36 @@ export const sacarTurno = async (req: Request, res: Response ) => {
     })
     return res.status(201).json(turnoCreado);
 }   
+
+//busca todos los turnos activos o en atencion del ciudadano
+export const misTurnos = async (req: Request, res: Response) => {
+    //lee el id del ciudadano desde el token
+    const ciudadanoId = req.usuario?.id;
+
+    if (!ciudadanoId) {
+        return res.status(401).json({ error: "No autenticado" });
+    }
+    //trae las filas que cumplan esa condicion
+    const turnos = await prisma.turno.findMany({
+        where: {
+            ciudadanoId,
+            estado: { in: ["ACTIVO", "EN_ATENCION"] },
+        },
+        //trae los datos que son útiles para mostrar en pantalla en la sección de mis turnos
+        select: {
+            id: true,
+            numero: true,
+            estado: true,
+            creadoEn: true,
+            sucursal: {
+                select: { nombre: true, organismo: true },
+            },
+        },
+        //ordena del turno mas reciente al mas viejo
+        orderBy: { creadoEn: "desc" },
+    });
+
+    return res.json(turnos);
+};
+
+    

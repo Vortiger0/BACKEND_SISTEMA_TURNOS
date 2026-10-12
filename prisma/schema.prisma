@@ -35,6 +35,7 @@ enum EstadoTurno {
   FINALIZADO
   CANCELADO
   AUSENTE
+  EXPIRADO
 }
 
 model Usuario {
