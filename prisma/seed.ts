@@ -11,12 +11,12 @@ const prisma = new PrismaClient ({adapter});
 async function main(){
     const sucursalesData = [
         {
-            nombre: "RedPagos Terminal",
+            nombre: "RedPagos Centro",
             organismo: "RedPagos",
             direccion: "Aparicio Saravia 658",
             latitud: -32.3671,
             longitud: -54.1745,
-            telefono: "4642-1234",
+            telefono: "4642-8276",
             margenCorte: 15,
             umbralPocoOcupado: 5,
             umbralOcupado:15,
@@ -33,6 +33,43 @@ async function main(){
             umbralPocoOcupado: 5,
             umbralOcupado:15,
             cantidadCajas: 3,
+        },
+        {
+            nombre: "Abitab centro",
+            organismo: "ABITAB",
+            direccion: "Aparicio Saravia 598",
+            latitud: -32.3671,
+            longitud: -54.1745,
+            telefono: "4642-8133",
+            margenCorte: 15,
+            umbralPocoOcupado: 5,
+            umbralOcupado:15,
+            cantidadCajas: 3,
+        },
+        {
+            nombre: "Abitab TATA",
+            organismo: "ABITAB",
+            direccion: "C.Villanueva Saravia Pinto",
+            latitud: -32.3671,
+            longitud: -54.1745,
+            telefono: "1111-1111",
+            margenCorte: 15,
+            umbralPocoOcupado: 5,
+            umbralOcupado:15,
+            cantidadCajas: 3,
+        },
+        {   
+            nombre: "Abitab DORADO",
+            organismo: "ABITAB",
+            direccion: "Remigio Castellanos 1106",
+            latitud: -32.3671,
+            longitud: -54.1745,
+            telefono: "1111-1111",
+            margenCorte: 15,
+            umbralPocoOcupado: 5,
+            umbralOcupado:15,
+            cantidadCajas: 3,
+            
         }
         ];
     const dias = [
@@ -79,7 +116,26 @@ const adminsData = [
         nombreUsuario: process.env.ADMIN_FARMACIA_USERNAME!,
         contrasena: process.env.ADMIN_FARMACIA_PASSWORD!,
         sucursal: sucursalesCreadas[1],
-    }
+    },
+    {
+        nombreCompleto: "Leo Fernandez",
+        nombreUsuario: process.env.ADMIN_ABITABCENTRO_USERNAME!,
+        contrasena: process.env.ADMIN_ABITABCENTRO_PASSWORD!,
+        sucursal: sucursalesCreadas[2],
+    },
+    {
+        nombreCompleto: "Andrea Guiterrez",
+        nombreUsuario: process.env.ADMIN_ABITABTATA_USERNAME!,
+        contrasena: process.env.ADMIN_ABITABTATA_PASSWORD!,
+        sucursal: sucursalesCreadas[3],
+    },
+    {
+        nombreCompleto: "Marcos Rodriguez",
+        nombreUsuario: process.env.ADMIN_ABITABDORADO_USERNAME!,
+        contrasena: process.env.ADMIN_ABITABDORADO_PASSWORD!,
+        sucursal: sucursalesCreadas[4],
+    },
+
 ];
 
 for (const datos of adminsData) {
