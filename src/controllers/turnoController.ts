@@ -202,4 +202,46 @@ export const misTurnos = async (req: Request, res: Response) => {
     return res.json(turnos);
 };
 
-    
+//cancela un turno del ciudadano logeado, primero confirma que haya sesion después lee y valida el id del turno que viene en la url
+export const cancelarTurno = async (req: Request, res: Response) => {
+   //id sacado del token verificado
+    const ciudadanoId = req.usuario?.id;
+
+    if (!ciudadanoId) {
+        return res.status(401).json({error: "No autenticado"});
+    }
+
+    //el id del turno viaja en la url, por eso se lee el req.params y no el body
+    const {id} = req.params;
+
+    if (!id) {
+        return res.status(400).json({error: "Falta el id del turno"})
+    }
+
+    //hay que convertir el req.params que siempre da texto a número antes de usarlo en la consulta de prisma
+    //tambien confirma que la conversion haya funcionado sino el valor Number da NaN
+    const turnoId = Number(id);
+
+    if (isNaN(turnoId)) {
+        return res.status(400).json({error: "El id del turno no es válido"})
+    }
+    //busca el turno por su id sin ningun filtro
+    const turno = await prisma.turno.findUnique({
+        where: {id: turnoId},
+    })
+    //cubre dos casos, que el turno no exista o que exista pero le pertenezca a otro ciudadano, de darse alguno da error
+    if (!turno || turno.ciudadanoId !== ciudadanoId) {
+        return res.status(404).json({error: "Turno no encontrado"})
+    }
+    //mientras el turno esté en activo se puede cancelar
+    if (turno.estado !== "ACTIVO") {
+        return res.status(400).json({error: "Este turno no se puede cancelar"});
+    }
+
+    //actualiza el estado a cancelado 
+    await prisma.turno.update({
+        where: {id: turnoId},
+        data: {estado: "CANCELADO"},
+    });
+    return res.json({mensaje: "Turno cancelado correctamente"})
+}

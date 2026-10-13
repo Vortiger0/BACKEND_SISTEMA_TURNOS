@@ -6,7 +6,7 @@ const router: express.Router = express.Router();
 
 const limiteLogin = rateLimit({
     windowMs: 15 * 60 * 1000,// 15 minutos
-    limit: 5, //maximo de 5 pedidos en esa ventana
+    limit: 8, //maximo de 5 pedidos en esa ventana
     message: {error: "Demasiados intentos de login"},
     standardHeaders: "draft-8",
     legacyHeaders: false,
