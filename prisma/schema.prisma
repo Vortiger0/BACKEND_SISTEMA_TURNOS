@@ -75,6 +75,7 @@ model Funcionario {
   sucursal Sucursal @relation(fields: [sucursalId], references: [id])
 
   @@unique([sucursalId, numeroCaja])
+  turnos Turno[]
 }
 
 model Admin {
@@ -150,8 +151,11 @@ model Turno {
   sucursalId Int
   //el campo puede quedar null puesto que los turnos sacados desde máquina del local no tienen asociado un ciudadano
   ciudadanoId Int?
+  //nullable porque un turno recien creado todavía no tiene algún funcionario asignado
+  funcionarioId Int?
 
   sucursal Sucursal @relation(fields: [sucursalId], references: [id])
   ciudadano Ciudadano? @relation(fields: [ciudadanoId], references: [id])
+  funcionario Funcionario? @relation(fields: [funcionarioId], references: [id])
 
 }
