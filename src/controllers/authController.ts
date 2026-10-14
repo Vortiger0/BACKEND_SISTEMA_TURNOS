@@ -127,6 +127,8 @@ export const login = async (req: Request, res: Response) => {
     let userId;
     let rol;
     let nombreSucursal: string | null = null;
+    //nadie más tiene este campo, solo admin lo tiene y lo reescribe a true
+    let debeCambiarCredenciales = false;
 
     //si es correo busca en ciudadano trayendo solo lo necesario (id, si verificó correo, contra hasheada y rol). No confundir aquí los true con un valor, es una sintaxis de prisma para indicar que se traiga ese dato.
     if (esCorreo) {
@@ -158,7 +160,8 @@ export const login = async (req: Request, res: Response) => {
         : await prisma.admin.findUnique({
             where: {nombreUsuario: identificador},
             select: {id: true, usuario: { select: {contrasena: true, rol: true }},
-                                sucursal: {select:{nombre:true}}}
+                                sucursal: {select:{nombre:true}},
+                                debeCambiarCredenciales: true}
         })
     const cuenta = funcionario ?? admin;
 
@@ -171,6 +174,10 @@ export const login = async (req: Request, res: Response) => {
     contrasenaHasheada = cuenta.usuario.contrasena;
     rol = cuenta.usuario.rol;
     nombreSucursal = cuenta.sucursal.nombre;
+
+    if (admin) {
+        debeCambiarCredenciales = admin.debeCambiarCredenciales;
+    }
 
 
     }
@@ -198,6 +205,54 @@ export const login = async (req: Request, res: Response) => {
         token,
         rol,
         sucursal: nombreSucursal,
+        debeCambiarCredenciales,
     })
 
 }
+
+const cambiarCredencialesSchema = z.object({
+    nuevoUsuario: z.string().min(3, "El usuario debe tener al menos 3 caracteres"),
+    nuevaContrasena: z.string().min(8, "La contraseña debe tener al menos 8 caracteres")
+})
+//para admins tras el primer login
+export const cambiarCredenciales = async (req: Request, res:Response) => {
+    //id del admin sacado del token
+    const adminId = req.usuario?.id;
+
+    if (!adminId) {
+        return res.status(401).json({ error: "No autenticado"});
+    }
+
+    //valida que vengan los dos campois, con el largo mínimo exigido
+    const resultado = cambiarCredencialesSchema.safeParse(req.body);
+
+    if (!resultado.success) {
+        return res.status(400).json({error: resultado.error.issues[0]?.message});
+    }
+    const { nuevoUsuario, nuevaContrasena} = resultado.data;
+
+    //chequea que el nombre de usuario elegido no esté ya tomado por otro admin
+    const yaExiste = await prisma.admin.findUnique({
+        where: {nombreUsuario: nuevoUsuario}
+    })
+
+    if (yaExiste) {
+        return res.status(400).json({error: "Ese nombre ya está en uso"})
+    }
+
+    //hashea la nueva contra
+    const contrasenaHasheada = await bcrypt.hash(nuevaContrasena, 10)
+    
+    //actualiza el nombre de usuario y marca el cambio como completado (debeCambiarCredenciales pasa a false, y el login ya no vuelve a exigir este paso la próxima vez)
+    await prisma.admin.update({
+        where: {id: adminId},
+        data: {nombreUsuario: nuevoUsuario, debeCambiarCredenciales:false},
+    });
+
+    await prisma.usuario.update({
+        where: {id: adminId},
+        data: { contrasena: contrasenaHasheada},
+    })
+
+    return res.json({mensaje: "Credenciales actualizadas correctamente"})
+ }
