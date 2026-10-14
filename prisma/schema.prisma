@@ -82,6 +82,7 @@ model Admin {
   id Int @id
   nombreUsuario String @unique @db.VarChar(50)
   sucursalId Int @unique
+  debeCambiarCredenciales Boolean @default(true)
 
   usuario Usuario @relation(fields: [id], references: [id])
   sucursal Sucursal @relation(fields: [sucursalId], references: [id])

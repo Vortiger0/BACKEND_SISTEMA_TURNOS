@@ -1,5 +1,6 @@
 import express from "express";
-import { registrarCiudadano, verificarCorreo, login } from "../controllers/authController";
+import { registrarCiudadano, verificarCorreo, login, cambiarCredenciales } from "../controllers/authController";
+import { verificarToken } from "../middlewares/authMiddleware";
 import { rateLimit } from "express-rate-limit";
 
 const router: express.Router = express.Router();
@@ -15,6 +16,7 @@ const limiteLogin = rateLimit({
 router.post("/registro", registrarCiudadano);
 router.get("/verificar/:token", verificarCorreo);
 router.post("/login",limiteLogin, login);
+router.put("/cambiar-credenciales", verificarToken, cambiarCredenciales)
 export default router;
 
 
