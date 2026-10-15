@@ -1,5 +1,5 @@
 import express from "express";
-import { registrarCiudadano, verificarCorreo, login, cambiarCredenciales } from "../controllers/authController";
+import { registrarCiudadano, verificarCorreo, login, cambiarCredenciales, quienSoy } from "../controllers/authController";
 import { verificarToken } from "../middlewares/authMiddleware";
 import { rateLimit } from "express-rate-limit";
 
@@ -17,6 +17,7 @@ router.post("/registro", registrarCiudadano);
 router.get("/verificar/:token", verificarCorreo);
 router.post("/login",limiteLogin, login);
 router.put("/cambiar-credenciales", verificarToken, cambiarCredenciales)
+router.get("/quien-soy", verificarToken, quienSoy)
 export default router;
 
 
