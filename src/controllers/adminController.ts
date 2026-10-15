@@ -1,7 +1,6 @@
 import type {Request, Response} from "express";
 import {prisma} from "../prisma"
 import {z} from "zod";
-import { DiaSemana } from "../../generated/prisma/enums";
 
 //valida los datos del día individual dentro del array horarios, que día de la semana es, si atiende ese día y en qué horario
 const horarioDiaSchema = z.object({
@@ -63,6 +62,7 @@ export const actualizarHorarios = async (req: Request, res: Response) => {
         }
     })
 
+    //el for toma los 7 objetos que llegaron en horarios(uno por cada dia de la semana), por cada uno actualiza la fila correspondiente de horario en la base
     for (const dia of horarios) {
         await prisma.horario.update({
             where: {
@@ -73,8 +73,8 @@ export const actualizarHorarios = async (req: Request, res: Response) => {
             },
             data: {
                 atiende: dia.atiende,
-                horaDesde: new Date(`1970-01-01T${dia.horaDesde}:00`),
-                horaHasta: new Date(`1970-01-01T${dia.horaHasta}:00`),
+                horaDesde: new Date(`1970-01-01T${dia.horaDesde}:00Z`),
+                horaHasta: new Date(`1970-01-01T${dia.horaHasta}:00Z`),
             }
         });
     }

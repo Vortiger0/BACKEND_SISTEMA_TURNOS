@@ -6,6 +6,7 @@ import authRoutes from "./routes/authRoute"
 import sucursalRoutes from "./routes/sucursalesRoute";
 import turnoRoutes from "./routes/turnoRoute";
 import funcionarioRoutes from "./routes/funcionarioRoutes"
+import adminRoutes from "./routes/adminRoute"
 import { cerrarTurnosVencidos } from "./jobs/cerrarTurnosVencidos";
 
 
@@ -18,6 +19,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/sucursales", sucursalRoutes);
 app.use("/api/turnos", turnoRoutes)
 app.use("/api/funcionario", funcionarioRoutes)
+app.use("/api/admin", adminRoutes)
 
 app.get("/testeo", async (_req, res) => {
   const sucursales = await prisma.sucursal.count();
