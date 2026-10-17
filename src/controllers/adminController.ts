@@ -116,8 +116,7 @@ export const crearExcepcion = async (req: Request, res: Response) => {
 
         const { fecha } = resultado.data;
         //convierte el texto a un objeto Date real, y lo normaliza a medianoche (00:00), para comparar siempre con esa hora.
-        const fechaConvertida = new Date(fecha);
-        fechaConvertida.setHours(0, 0, 0, 0);
+        const fechaConvertida = new Date(`${fecha}T00:00:00Z`);
 
         const yaExiste = await prisma.excepcion.findFirst({
             where: {
@@ -138,4 +137,51 @@ export const crearExcepcion = async (req: Request, res: Response) => {
         })
 
         return res.status(201).json(excepcionCreada)
+    }
+
+    export const eliminarExcepcion = async (req: Request, res: Response) => {
+        const adminId = req.usuario?.id;
+        //busca si ese admin está autenticado
+        if (!adminId) {
+            return res.status(401).json({ error : "Administrador no encontrado"})
+        }
+
+        const admin = await prisma.admin.findUnique({
+            where: { id: adminId },
+        });
+        
+        //trae sus datos completos para confirmar que la excepción corresponda a su sucursal
+
+        if (!admin) {
+            return res.status(404).json({ error: "Administrador no encontrado" });
+        }
+
+        const {id} = req.params;
+
+        if (!id){
+            return res.status(400).json({ error: "Falta el id de la excepción"});
+
+        }
+
+        //convierte el texto de la url a numero
+        const excepcionId = Number(id);
+
+        if (isNaN (excepcionId)) {
+            return res.status(400).json({error: "El id no es válido"})
+        }
+        //busca la excepcion en la base y confirma que venga de la sucursal de este admin
+        const excepcion = await prisma.excepcion.findUnique({
+            where: { id: excepcionId},
+        });
+
+        if (!excepcion || excepcion.sucursalId !== admin.sucursalId) {
+            return res.status(404).json({ error: "Excepción no encontrada"})
+        }
+
+        //borra la fila
+        await prisma.excepcion.delete({
+            where: {id: excepcionId},
+        });
+        
+        return res.json({ mensaje: "Excepción eliminada correctamente"})
     }
