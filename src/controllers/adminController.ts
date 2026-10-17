@@ -185,3 +185,40 @@ export const crearExcepcion = async (req: Request, res: Response) => {
         
         return res.json({ mensaje: "Excepción eliminada correctamente"})
     }
+
+    //trae toda la configuración actual de la parte de horarios para que el frontend pueda precargar el formulario con los valores reales.
+    export const obtenerConfiguracion = async (req: Request, res: Response) => {
+        const adminId = req.usuario?.id;
+
+        if (!adminId) {
+            return res.status(401).json({ error: "No autenticado"})
+        }
+
+        const admin = await prisma.admin.findUnique ({
+            where: {id: adminId},
+        })
+ 
+        if (!admin) {
+            return res.status(404).json({ error: "Administrador no encontrado"});
+        }
+
+        //trae los campos de configuracion. Todos los horarios y excepciones de la sucursal específica.
+        const sucursal = await prisma.sucursal.findUnique({
+            where: {id: admin.sucursalId},
+            select: {
+                margenCorte: true,
+                umbralPocoOcupado: true,
+                umbralOcupado: true,
+                maxTurnosDia: true,
+                cantidadCajas: true,
+                horarios: true,
+                excepciones: true,
+            }
+        });
+
+        if (!sucursal) {
+            return res.status(404).json({ error: "Sucursal no encontrada"})
+        }
+
+        return res.json(sucursal)
+    }
