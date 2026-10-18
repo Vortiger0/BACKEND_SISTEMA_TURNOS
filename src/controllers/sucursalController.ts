@@ -16,6 +16,18 @@ const calcularConcurrencia = (
     return "Muy ocupado"
 }
 
+/*
+const formatearHorarios = (horarios: Horario[]): string => {
+    const diasOrdenados = ["LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES", "SABADO", "DOMINGO" ];
+
+    const abreviatura: Record<string, string> = {
+        LUNES: "Lun", MARTES: "Mar", MIERCOLES: "Mié", JUEVES: "Jue", VIERNES: "Vie", SABADO: "Sáb", DOMINGO: "Dom"
+    }
+}
+
+*/
+
+
 export const listarSucursales = async (req: Request, res:Response) => {
     //Trae todas las sucursales con sus datos
     const sucursales = await prisma.sucursal.findMany({
