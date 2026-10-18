@@ -1,7 +1,7 @@
 import type {Request, Response} from "express";
 import {prisma} from "../prisma"
 import {z} from "zod";
-import { error } from "node:console";
+import bcrypt from "bcryptjs";
 
 //valida los datos del día individual dentro del array horarios, que día de la semana es, si atiende ese día y en qué horario
 const horarioDiaSchema = z.object({
@@ -221,4 +221,278 @@ export const crearExcepcion = async (req: Request, res: Response) => {
         }
 
         return res.json(sucursal)
+    }
+
+    export const listarFuncionarios = async (req: Request, res: Response) => {
+        const adminId = req.usuario?.id;
+
+        if (!adminId) {
+            return res.status(401).json({ error: "No autenticado"});
+        }
+
+        const admin = await prisma.admin.findUnique({
+            where: { id: adminId},
+        })
+
+        if (!admin){
+            return res.status(404).json({error: "Administrador no encontrado"})
+        }
+        //devuelve todos los funcionarios de la sucursal del admin logueado
+        const funcionarios = await prisma.funcionario.findMany({
+            where: { sucursalId: admin.sucursalId},
+            select: {
+                id: true,
+                nombreUsuario: true,
+                numeroCaja: true,
+                usuario: {
+                    select: { nombreCompleto: true},
+                }
+            }
+        })
+
+        return res.json(funcionarios);
+        
+    
+    }
+
+    const crearFuncionarioSchema = z.object({
+        nombreCompleto: z.string().min(1, "El nombre es obligatorio"),
+        nombreUsuario: z.string().min(3, "El usuario debe tener al menos 3 caracteres"),
+        numeroCaja: z.number().int().positive(),
+        contrasena: z.string().min(8, "La contraseña debe tener al menos 8 caracteres")
+    });
+
+    //el admin da de alta a un funcionario nuevo asignandole, nombre, usuario, numero de caja y contra inicial
+    export const crearFuncionario = async (req: Request, res: Response) => {
+        const adminId = req.usuario?.id;
+
+        if (!adminId) {
+        return res.status(401).json({ error: "No autenticado" });
+    }
+
+    const admin = await prisma.admin.findUnique({
+        where: { id: adminId },
+    });
+
+    if (!admin) {
+        return res.status(404).json({ error: "Administrador no encontrado" });
+    }
+
+    const resultado = crearFuncionarioSchema.safeParse(req.body);
+
+    if (!resultado.success) {
+        return res.status(400).json({ error: resultado.error.issues[0]?.message})
+    }
+
+    const {nombreCompleto, nombreUsuario, numeroCaja, contrasena} = resultado.data
+
+    //se debe validar que numeroCaja no supere a cantidadCajas y que no esté ocupada
+    const sucursal = await prisma.sucursal.findUnique({
+        where: { id: admin.sucursalId}
+    })
+
+    if (!sucursal) {
+        return res.status(404).json({ error: "Sucursal no encontrada"});
+    }
+
+    if (numeroCaja > sucursal.cantidadCajas) {
+        return res.status(400).json({ error: `La sucursal solo tiene ${sucursal.cantidadCajas} cajas configuradas`})
+    }
+
+    const cajaOcupada = await prisma.funcionario.findFirst({
+        where: {
+            sucursalId: admin.sucursalId,
+            numeroCaja,
+        }
+    })
+
+    if (cajaOcupada){
+        return res.status(400).json({ error: "Esa caja ya está asignada a otro funcionario"})
+    }
+
+    //Se hashea la contra y se crea al funcionario, para ello primero se crea la fila de Usuario (ya que de ahí sale el ID del funcionario) para
+    //luego crear la fila del funcionario en sí. 
+    const contrasenaHasheada = await bcrypt.hash(contrasena, 10);
+
+    const usuario = await prisma.usuario.create({
+        data: {
+            nombreCompleto,
+            contrasena: contrasenaHasheada,
+            rol: "FUNCIONARIO"
+        }
+    });
+
+    const funcionarioCreado = await prisma.funcionario.create({
+        data: {
+            id: usuario.id,
+            nombreUsuario,
+            numeroCaja,
+            sucursalId: admin.sucursalId
+        }
+    })
+     return res.status(201).json(funcionarioCreado);
+    }
+
+    const editarFuncionarioSchema = z.object({
+        nombreCompleto: z.string().min(1, "El nombre es obligatorio"),
+        nombreUsuario: z.string().min(3, "El usuario debe tener al menos 3 caracteres"),
+        numeroCaja: z.number().int().positive(),
+        contrasena: z.string().min(8, "La contraseña debe tener al menos 8 caracteres").optional(),
+    })
+
+    export const editarFuncionario = async (req: Request, res: Response) => {
+        const adminId = req.usuario?.id;
+
+        if (!adminId) {
+            return res.status(401).json({ error: "No autenticado" });
+        }
+
+        const admin = await prisma.admin.findUnique({
+            where: { id: adminId },
+        });
+
+        if (!admin) {
+            return res.status(404).json({ error: "Administrador no encontrado" });
+        }
+
+        //lee el id del funcionario concreto desde la url
+        const { id } = req.params;
+        
+        //si no vino nada en la url corta aquí
+        if (!id) {
+            return res.status(400).json({error: "Falta el id del funcionario"});
+        }
+
+        //convierte el id a número
+        const funcionarioId = Number(id);
+
+        //confirma que la conversión haya funcionado
+        if (isNaN(funcionarioId)){
+            return res.status(400).json({error: "El id no es válido"})
+        }
+
+        const resultado = editarFuncionarioSchema.safeParse(req.body);
+
+        if (!resultado.success) {
+            return res.status(400).json({error: resultado.error.issues[0]?.message});
+        }
+
+        //busca el funcionario a editar, y confirma que pertenezca a la sucursal de este admin concreto
+        const { nombreCompleto, nombreUsuario, numeroCaja, contrasena} = resultado.data;
+
+        const funcionario = await prisma.funcionario.findUnique({
+            where: { id: funcionarioId},
+        });
+
+        if (!funcionario || funcionario.sucursalId !== admin.sucursalId) {
+            return res.status(404).json({ error: "Funcionario no encontrado"});
+        }
+
+        //trae la sucursal para validar la caja elegida contra la cantidad real configurada
+        const sucursal = await prisma.sucursal.findUnique({
+            where: { id: admin.sucursalId},
+        })
+
+        if (!sucursal) {
+            return res.status(404).json({ error: "Sucursal no encontrada"})
+        }
+
+        //valida que no se asignen cajas que no existan segun la config
+        if (numeroCaja > sucursal.cantidadCajas) {
+            return res.status(400).json({error: `La sucursal solo tiene ${sucursal.cantidadCajas} cajas configuradas`})
+        }
+
+        //solo chequea si la caja está ocupada cuando el admin la está cambiando
+        if (numeroCaja !== funcionario.numeroCaja) {
+            const cajaOcupada = await prisma.funcionario.findFirst({
+                where: {
+                    sucursalId: admin.sucursalId,
+                    numeroCaja
+                }
+            })
+
+            if (cajaOcupada) {
+                return res.status(400).json({ error: "Esa caja ya está asignada a otro funcionario"})
+            }
+        }
+
+        //si se mandó una contra nueva, se debe hashear y actualizar Usuario. Si no se mandó nada 
+        //porque es opcional, se deja la antigua contraseña intacta.
+        const datosUsuario: { nombreCompleto: string, contrasena?: string} = {
+            nombreCompleto,
+        };
+
+        if (contrasena) {
+            datosUsuario.contrasena = await bcrypt.hash(contrasena,10);
+        }
+
+        await prisma.usuario.update({
+            where: { id: funcionarioId},
+            data: datosUsuario,
+        })
+
+        const funcionarioActualizado = await prisma.funcionario.update({
+            where: { id: funcionarioId},
+            data: {
+                nombreUsuario,
+                numeroCaja
+            }
+        })
+
+        return res.json(funcionarioActualizado);
+    }
+
+    export const eliminarFuncionario = async (req: Request, res: Response) => {
+        const adminId = req.usuario?.id
+
+        if (!adminId){
+            return res.status(401).json({ error: "No autenticado"});
+        }
+
+        const admin = await prisma.admin.findUnique({
+            where: { id: adminId}, 
+        });
+
+        if (!admin){
+            return res.status(404).json({ error: "Administrador no encontrado"})
+        }
+
+        const {id} = req.params;
+
+        if (!id){
+            return res.status(400).json({ error: "Falta el id del funcionario"})
+        }
+
+        const funcionarioId = Number(id);
+
+        if (isNaN(funcionarioId)){
+            return res.status(400).json({error: "El id no es válido"})
+        }
+
+        const funcionario = await prisma.funcionario.findUnique({
+            where: { id: funcionarioId},
+        });
+
+        if (!funcionario || funcionario.sucursalId !== admin.sucursalId) {
+            return res.status(404).json({error: "Funcionario no encontrado"})
+
+        }
+
+        //Luego de las validaciones y de encontrar al funcionario prosigue con la eliminación
+        //primero "desvincula" todos los turnos que este funcionario haya atendido para que la bd no lo rechace el borrado por la relacion entre funcionario y turno
+        await prisma.turno.updateMany({
+            where: {funcionarioId: funcionarioId},
+            data: { funcionarioId: null},
+        });
+        //borra al funcionario y luego al usuario
+        await prisma.funcionario.delete({
+            where: { id: funcionarioId},
+        });
+
+        await prisma.usuario.delete({
+            where: { id: funcionarioId}
+        })
+
+        return res.json({ mensaje: "Funcionario eliminado correctamente"})
+
     }
