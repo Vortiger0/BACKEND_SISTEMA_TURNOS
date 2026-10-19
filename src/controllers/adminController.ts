@@ -496,3 +496,75 @@ export const crearExcepcion = async (req: Request, res: Response) => {
         return res.json({ mensaje: "Funcionario eliminado correctamente"})
 
     }
+
+    //valida los 4 datos que el admin puede editar en datos del local
+    const actualizarDatosLocalSchema = z.object({
+        direccion: z.string().min(1, "La dirección es obligatoria"),
+        telefono: z.string().min(1, "El teléfono es obligatorio"),
+        latitud: z.number(),
+        longitud: z.number(),
+    });
+    
+    export const actualizarDatosLocal = async (req: Request, res: Response) => {
+        const adminId = req.usuario?.id;
+
+        if (!adminId) {
+            return res.status(401).json({ error: "No autenticado" });
+        }
+
+        const admin = await prisma.admin.findUnique({
+            where: { id: adminId },
+        });
+
+        if (!admin) {
+        return res.status(404).json({ error: "Administrador no encontrado" });
+        }
+
+        const resultado = actualizarDatosLocalSchema.safeParse(req.body);
+
+        if (!resultado.success){
+            return res.status(400).json({error: resultado.error.issues[0]?.message})
+        }
+
+        const {direccion, telefono, latitud, longitud} = resultado.data;
+
+        await prisma.sucursal.update({
+            where: {id: admin.sucursalId},
+            data: {direccion, telefono, latitud, longitud},
+        })
+
+        return res.json({mensaje: "Datos del local actualizados correctamente"})
+
+    }
+
+    export const obtenerDatosLocal = async (req: Request, res:Response) => {
+        const adminId = req.usuario?.id;
+
+        if (!adminId) {
+            return res.status(401).json({ error: "No autenticado" });
+        }
+
+        const admin = await prisma.admin.findUnique({
+            where: { id: adminId },
+        });
+
+        if (!admin) {
+            return res.status(404).json({ error: "Administrador no encontrado" });
+        }
+
+        const sucursal = await prisma.sucursal.findUnique({
+            where: {id: admin.sucursalId},
+            select: {
+                direccion: true,
+                telefono: true,
+                latitud: true,
+                longitud: true,
+            }
+        })
+
+        if (!sucursal) {
+            return res.status(404).json({ error: "Sucursal no encontrada"});
+        }
+
+        return res.json(sucursal);
+    }
