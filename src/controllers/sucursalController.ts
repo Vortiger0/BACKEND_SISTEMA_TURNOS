@@ -1,7 +1,7 @@
 import type {Request, Response } from "express"
 import {prisma} from "../prisma";
 import type { Horario } from '../../generated/prisma/client'
-import { login } from "./authController";
+
 
 
 const calcularConcurrencia = (

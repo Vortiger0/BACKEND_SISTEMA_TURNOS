@@ -12,7 +12,7 @@ router.get("/funcionarios", verificarToken, verificarRol(["ADMIN"]), listarFunci
 router.post("/funcionarios", verificarToken, verificarRol(["ADMIN"]), crearFuncionario)
 router.put("/funcionarios/:id", verificarToken, verificarRol(["ADMIN"]), editarFuncionario)
 router.delete("/funcionarios/:id", verificarToken, verificarRol(["ADMIN"]), eliminarFuncionario)
-router.get("/datos-local", verificarToken, verificarRol(["ADMIN"]), obtenerDatosLocal);
-router.put("/datos-local", verificarToken, verificarRol(["ADMIN"]), actualizarDatosLocal);
+router.get("/local", verificarToken, verificarRol(["ADMIN"]), obtenerDatosLocal);
+router.put("/local", verificarToken, verificarRol(["ADMIN"]), actualizarDatosLocal);
 
 export default router;
