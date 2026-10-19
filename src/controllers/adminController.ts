@@ -3,6 +3,7 @@ import {prisma} from "../prisma"
 import {z} from "zod";
 import bcrypt from "bcryptjs";
 
+
 //valida los datos del día individual dentro del array horarios, que día de la semana es, si atiende ese día y en qué horario
 const horarioDiaSchema = z.object({
     diaSemana: z.enum(["LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES", "SABADO", "DOMINGO"]),
@@ -568,3 +569,109 @@ export const crearExcepcion = async (req: Request, res: Response) => {
 
         return res.json(sucursal);
     }
+
+//para la pantalla principal del admin
+export const obtenerResumenInicio = async (req: Request, res: Response) => {
+    const adminId = req.usuario?.id;
+
+    if (!adminId) {
+        return res.status(401).json({ error: "No autenticado" });
+    }
+
+    const admin = await prisma.admin.findUnique({
+        where: { id: adminId },
+    });
+
+    if (!admin) {
+        return res.status(404).json({ error: "Administrador no encontrado" });
+}
+
+    const hoy = new Date();
+    hoy.setHours(0,0,0,0)
+
+    //cuenta los turnos de hoy excluyendo los que liberaron cupo
+    const turnosHoy = await prisma.turno.count({
+        where: {
+            sucursalId: admin.sucursalId,
+            creadoEn: { gte: hoy},
+            estado: {notIn: ["AUSENTE", "CANCELADO"]}
+        },
+    })
+
+    //cuenta solo los turnos en finalizado de hoy
+    const atendidosHoy = await prisma.turno.count({
+        where: {
+            sucursalId: admin.sucursalId,
+            creadoEn: { gte: hoy},
+            estado: "FINALIZADO",
+        }
+    })
+
+    //cuenta solo los ausentes de hoy
+    const ausentesHoy = await prisma.turno.count({
+        where: {
+            sucursalId: admin.sucursalId,
+            creadoEn: { gte: hoy},
+            estado: "AUSENTE",
+        }
+    });
+
+    //busca el turno mas reciente que haya sido llamado hoy
+    const ultimoLlamado = await prisma.turno.findFirst({
+        where: {
+            sucursalId: admin.sucursalId,
+            creadoEn: { gte: hoy},
+            llamadoEn: { not: null},
+        },
+        orderBy: { llamadoEn: "desc"}
+    })
+
+    const sucursal = await prisma.sucursal.findUnique({
+        where: {id: admin.sucursalId},
+    })
+
+    if (!sucursal){
+        return res.status(404).json({ error: "Sucursal no encontrada"})
+    }
+
+    //busca el horario del día actual y si el local atiende hoy y la hora cae dentro del rango
+    //lo marca como abierto, en otro caso, cerrado.
+    const diasSemana = [
+        "DOMINGO", "LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES", "SABADO"
+    ] as const;
+
+    const diaActual = diasSemana[new Date().getDay()];
+
+    const horarioHoy = await prisma.horario.findUnique({
+        where: {
+            sucursalId_diaSemana: {
+                sucursalId: admin.sucursalId,
+                diaSemana: diaActual!,
+            }
+        }
+    })
+
+   let estadoLocal = "Cerrado";
+   
+   if (horarioHoy && horarioHoy.atiende) {
+    const ahora = new Date()
+    const horaActual = ahora.getHours() * 60 + ahora.getMinutes();
+
+    const horaDesdeMinutos = horarioHoy.horaDesde.getUTCHours() * 60 + horarioHoy.horaDesde.getUTCMinutes()
+    const horaHastaMinutos = horarioHoy.horaHasta.getUTCHours() * 60 + horarioHoy.horaHasta.getUTCMinutes();
+
+    if (horaActual >= horaDesdeMinutos && horaActual <= horaHastaMinutos ) {
+        estadoLocal = "Abierto";
+    }
+   }
+
+   return res.json({
+    turnosHoy,
+    numeroActual: ultimoLlamado ? ultimoLlamado.numero : null,
+    estadoLocal,
+    atendidosHoy,
+    ausentesHoy
+   })
+
+
+}
