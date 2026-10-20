@@ -70,6 +70,18 @@ async function main(){
             umbralOcupado:15,
             cantidadCajas: 3,
             
+        },
+        {
+            nombre: "Sucursal de Testing",
+            organismo: "TESTING",
+            direccion: "N/A",
+            latitud: 0,
+            longitud: 0,
+            telefono: "0000-0000",
+            margenCorte: 15,
+            umbralPocoOcupado: 5,
+            umbralOcupado: 15,
+            cantidadCajas: 1,
         }
         ];
     const dias = [
@@ -135,6 +147,12 @@ const adminsData = [
         contrasena: process.env.ADMIN_ABITABDORADO_PASSWORD!,
         sucursal: sucursalesCreadas[4],
     },
+    {
+        nombreCompleto: "Admin de Testing",
+        nombreUsuario: process.env.ADMIN_TESTING_USERNAME!,
+        contrasena: process.env.ADMIN_TESTING_PASSWORD!,
+        sucursal: sucursalesCreadas[5],
+    }
 
 ];
 
