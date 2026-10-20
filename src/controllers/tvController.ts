@@ -45,6 +45,7 @@ export const obtenerEstadoTV = async (req: Request, res: Response) => {
         }
     })
 
+    //convierte cada funcionario a un formato simple: caja, si está atendiendo o esperando, y que numero tiene
     const cajas = funcionarios.map((funcionario) => ({
         numeroCaja: funcionario.numeroCaja,
         estado: funcionario.turnos.length > 0 ? "ATENDIENDO" : "ESPERANDO",
@@ -52,4 +53,6 @@ export const obtenerEstadoTV = async (req: Request, res: Response) => {
     }))
 
     return res.json({ cajas })
+
+    
 }

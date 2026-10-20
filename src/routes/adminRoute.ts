@@ -14,6 +14,7 @@ router.put("/funcionarios/:id", verificarToken, verificarRol(["ADMIN"]), editarF
 router.delete("/funcionarios/:id", verificarToken, verificarRol(["ADMIN"]), eliminarFuncionario)
 router.get("/local", verificarToken, verificarRol(["ADMIN"]), obtenerDatosLocal);
 router.put("/local", verificarToken, verificarRol(["ADMIN"]), actualizarDatosLocal);
-router.get("/resumen", verificarToken, verificarRol(["ADMIN"]), obtenerResumenInicio)
+
+router.get("/inicio", verificarToken, verificarRol(["ADMIN"]), obtenerResumenInicio)
 
 export default router;
