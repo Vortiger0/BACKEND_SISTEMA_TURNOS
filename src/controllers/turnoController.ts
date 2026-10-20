@@ -88,11 +88,11 @@ export const sacarTurno = async (req: Request, res: Response ) => {
 
     const hasta = horarioHoy.horaHasta;
     const horaHastaMinutos = hasta.getUTCHours() * 60 + hasta.getUTCMinutes();
-
+    const horaCorte = horaHastaMinutos - sucursal.margenCorte
     
     //valida si la hora actual esté en el rango de atención, si la hora actual
     //es menor que la hora en la que comienza a atender o es mayor a la hora en la que se deja de atender entonces estamos fuera de horario de atención
-    if (horaActual < horaDesdeMinutos || horaActual > horaHastaMinutos ) {
+    if (horaActual < horaDesdeMinutos || horaActual > horaCorte ) {
         return res.status(400).json({error: "La sucursal está fuera de su horario de atención"})
     }
 

@@ -129,6 +129,7 @@ export const login = async (req: Request, res: Response) => {
     let nombreSucursal: string | null = null;
     //nadie más tiene este campo, solo admin lo tiene y lo reescribe a true
     let debeCambiarCredenciales = false;
+    let numeroCaja: number | null = null;
 
     //si es correo busca en ciudadano trayendo solo lo necesario (id, si verificó correo, contra hasheada y rol). No confundir aquí los true con un valor, es una sintaxis de prisma para indicar que se traiga ese dato.
     if (esCorreo) {
@@ -153,7 +154,9 @@ export const login = async (req: Request, res: Response) => {
         const funcionario = await prisma.funcionario.findUnique({
             where: { nombreUsuario: identificador },
             select: { id: true, usuario: { select: { contrasena: true, rol: true}},
-                                sucursal:{ select: {nombre:true}}}
+                                sucursal:{ select: {nombre:true}},
+                                numeroCaja: true}
+                                
         })
         const admin = funcionario 
         ? null
@@ -179,6 +182,9 @@ export const login = async (req: Request, res: Response) => {
         debeCambiarCredenciales = admin.debeCambiarCredenciales;
     }
 
+    if (funcionario) {
+        numeroCaja = funcionario.numeroCaja
+    }
 
     }
     //hashea la contraseña ingresada y la compara con el hash ya guardado
@@ -206,6 +212,7 @@ export const login = async (req: Request, res: Response) => {
         rol,
         sucursal: nombreSucursal,
         debeCambiarCredenciales,
+        numeroCaja
     })
 
 }
@@ -256,3 +263,55 @@ export const cambiarCredenciales = async (req: Request, res:Response) => {
 
     return res.json({mensaje: "Credenciales actualizadas correctamente"})
  }
+
+
+//ep para que el frontend pueda sincronizar su store al arrancar la app, en vez de confiar en lo que tenga guardado en localStorage (que cualquiera puede editar a mano)
+export const quienSoy = async (req: Request, res: Response) => {
+    const userId = req.usuario?.id;
+    const rol = req.usuario?.rol;
+
+    if (!userId || !rol) {
+        return res.status(401).json ({error: "No autenticado"})
+    }
+        //cada rol vive en una tabla distinta, con datos distintos para traer, por eso se separa en tres verificaciones, una por cada tipo de cuenta
+        if (rol === "CIUDADANO") {
+        const ciudadano = await prisma.ciudadano.findUnique({
+            where: { id: userId },
+            select: { correoVerificado: true },
+        });
+
+        if (!ciudadano) {
+            return res.status(404).json({ error: "Cuenta no encontrada" });
+        }
+        //el ciudadano no tiene este campo (false)
+        return res.json({ rol, sucursal: null, debeCambiarCredenciales: false });
+    }
+
+    if (rol === "FUNCIONARIO") {
+        const funcionario = await prisma.funcionario.findUnique({
+            where: { id: userId },
+            select: { sucursal: { select: { nombre: true } } },
+        });
+
+        if (!funcionario) {
+            return res.status(404).json({ error: "Cuenta no encontrada" });
+        }
+
+        return res.json({ rol, sucursal: funcionario.sucursal.nombre, debeCambiarCredenciales: false });
+    }
+
+    if (rol === "ADMIN") {
+        const admin = await prisma.admin.findUnique({
+            where: { id: userId },
+            select: { debeCambiarCredenciales: true, sucursal: { select: { nombre: true } } },
+        });
+
+        if (!admin) {
+            return res.status(404).json({ error: "Cuenta no encontrada" });
+        }
+
+        return res.json({ rol, sucursal: admin.sucursal.nombre, debeCambiarCredenciales: admin.debeCambiarCredenciales });
+    }
+
+    return res.status(400).json({ error: "Rol desconocido" });
+};
