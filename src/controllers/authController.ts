@@ -315,3 +315,48 @@ export const quienSoy = async (req: Request, res: Response) => {
 
     return res.status(400).json({ error: "Rol desconocido" });
 };
+
+
+
+
+//ep para casos de olvido de contraseña
+
+//se valida el formato del correo
+const olvideContrasenaSchema = z.object({
+    correo: z.email("El correo no es válido")
+})
+
+export const olvideContrasena = async (req: Request, res: Response) => {
+    const resultado = olvideContrasenaSchema.safeParse(req.body);
+
+    if (!resultado.success) {
+        return res.status(400).json({ error: resultado.error.issues[0]?.message})
+
+    }
+
+    const { correo } = resultado.data;
+
+    const ciudadano = await prisma.ciudadano.findUnique({
+        where: { correo },
+    })
+
+    //busca primero en ciudadano si el correo asociado corresponde, si no era, busca en admin.
+    const admin = ciudadano ? null : await prisma.admin.findUnique({
+        where: { correo },
+    })
+
+    if (!ciudadano && !admin) {
+        //aunque no encuentre nada, por motivos de seguridad muestra mensaje generico
+        return res.json({ mensaje: "Si el correo existe, te enviamos un enlace de recuperación"})
+    }
+
+    const cuenta = ciudadano ?? admin;
+    const tipo = ciudadano ? "CIUDADANO" : "ADMIN";
+
+    const token = jwt.sign(
+        { id: cuenta!.id, tipo },
+        config.jwtSecret,
+        { expiresIn: "1h"}
+    )
+    
+}
