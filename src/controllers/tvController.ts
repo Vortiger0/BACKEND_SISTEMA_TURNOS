@@ -15,6 +15,16 @@ export const obtenerEstadoTV = async (req: Request, res: Response) => {
     if (isNaN(sucursalIdNum)) {
         return res.status(400).json({ error: "El id no es válido"})
     }
+
+    const sucursal = await prisma.sucursal.findUnique({
+        where: { id: sucursalIdNum},
+        select: { nombre: true}
+    })
+
+    if (!sucursal) {
+        return res.status(404).json({error: "Sucursal no encontrada"})
+    }
+
     //fecha normalizada a medianoche para filtrar los turnos de hoy
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0)
@@ -52,7 +62,7 @@ export const obtenerEstadoTV = async (req: Request, res: Response) => {
         numeroTurno: funcionario.turnos.length > 0 ? funcionario.turnos[0]!.numero : null,
     }))
 
-    return res.json({ cajas })
+    return res.json({ nombreSucursal: sucursal.nombre, cajas })
 
     
 }

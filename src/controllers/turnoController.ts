@@ -248,6 +248,12 @@ export const cancelarTurno = async (req: Request, res: Response) => {
 
 // Función para devolver la fila virtual con 5 turnos previos activos actuales hacia el front
 export const obtenerFilaVirtual = async (req: Request, res: Response) => {
+    const ciudadanoId = req.usuario?.id
+
+    if (!ciudadanoId) {
+        return res.status(401).json({ error: "No autenticado"})
+    }
+
     const { id } = req.params;
 
     if (!id) {
@@ -262,10 +268,10 @@ export const obtenerFilaVirtual = async (req: Request, res: Response) => {
 
     const turnoUsuario = await prisma.turno.findUnique({
         where: { id: turnoIdNum },
-        select: { id: true, sucursalId: true, numero: true }
+        select: { id: true, sucursalId: true, numero: true, ciudadanoId: true }
     });
 
-    if (!turnoUsuario) {
+    if (!turnoUsuario || turnoUsuario.ciudadanoId !== ciudadanoId) {
         return res.status(404).json({ error: "Turno no encontrado" });
     }
 
