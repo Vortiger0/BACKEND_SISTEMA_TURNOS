@@ -2,7 +2,7 @@ import type { Request, Response } from 'express';
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { config } from "../config";
-import { enviarCorreoVerificacion } from "../mailer";
+import { enviarCorreoVerificacion, enviarCorreoRecuperacion } from "../mailer";
 import { z } from "zod";
 import { prisma } from "../prisma";
 
@@ -350,13 +350,77 @@ export const olvideContrasena = async (req: Request, res: Response) => {
         return res.json({ mensaje: "Si el correo existe, te enviamos un enlace de recuperación"})
     }
 
+    //cuenta tiene alguno de los dos valores.
     const cuenta = ciudadano ?? admin;
+    //guarda que tipo de cuenta es para incluirlo en el token
     const tipo = ciudadano ? "CIUDADANO" : "ADMIN";
 
+    //crea el token para que viaja en el link del correo y autorizar el reseteo de contra
     const token = jwt.sign(
         { id: cuenta!.id, tipo },
         config.jwtSecret,
         { expiresIn: "1h"}
-    )
+    );
+
+    //funcion que apunta a la pantalla de reestablecimiento de contra
+    await enviarCorreoRecuperacion(correo, token)
+
+    return res.json({ mensaje: "Si el correo existe, te enviamos un enlace de recuperación."})
     
+}
+
+const restabelcerContrasenaSchema = z.object({
+    token: z.string().min(1, "Falta el token"),
+    nuevaContrasena: z.string().min(8, "La contraseña debe tener al menos 8 caracteres")
+})
+
+export const restablecerContrasena = async (req: Request, res: Response) => {
+    //recibe los datos que llegaron en el pedido y lo compara con las reglas establecidas
+    const resultado = restabelcerContrasenaSchema.safeParse(req.body);
+
+    if (!resultado.success) {
+        return res.status(400).json({ error: resultado.error.issues[0]?.message})
+    }
+
+    
+    const { token, nuevaContrasena } = resultado.data;
+
+    //intenta verificar que el token sea válido
+    let payload: { id: number; tipo: string} 
+
+    try {
+        payload = jwt.verify(token, config.jwtSecret) as { id: number; tipo: string}
+    } catch (error) {
+        return res.status(400).json({ error: "El enlace no es válido o venció"})
+    }
+
+    //comprobamos por si acaso si la cuenta sigue existiendo en la bd entre el tiempo que se mandó el correo y se usó el link 
+    if (payload.tipo === "CIUDADANO") {
+        const ciudadano = await prisma.ciudadano.findUnique({
+            where: { id: payload.id}
+        })
+
+        if (!ciudadano) {
+            return res.status(404).json({ error: "Cuenta no encontrada"})
+        }
+    }
+
+    if (payload.tipo === "ADMIN") {
+        const admin = await prisma.admin.findUnique({
+            where: { id: payload.id}
+        })
+
+        if (!admin) {
+            return res.status(404).json({ error: "Cuenta no encontrada"})
+        }
+    }
+
+    const contrasenaHasheada = await bcrypt.hash(nuevaContrasena, 10)
+
+    await prisma.usuario.update({
+        where: { id: payload.id},
+        data: { contrasena: contrasenaHasheada}
+    })
+
+    return res.json({ mensaje: "Contraseña actualizada correctamente"})
 }
