@@ -219,7 +219,8 @@ export const login = async (req: Request, res: Response) => {
 
 const cambiarCredencialesSchema = z.object({
     nuevoUsuario: z.string().min(3, "El usuario debe tener al menos 3 caracteres"),
-    nuevaContrasena: z.string().min(8, "La contraseña debe tener al menos 8 caracteres")
+    nuevaContrasena: z.string().min(8, "La contraseña debe tener al menos 8 caracteres"),
+    correo: z.email("El correo no es válido")
 })
 //para admins tras el primer login
 export const cambiarCredenciales = async (req: Request, res:Response) => {
@@ -236,7 +237,7 @@ export const cambiarCredenciales = async (req: Request, res:Response) => {
     if (!resultado.success) {
         return res.status(400).json({error: resultado.error.issues[0]?.message});
     }
-    const { nuevoUsuario, nuevaContrasena} = resultado.data;
+    const { nuevoUsuario, nuevaContrasena, correo} = resultado.data;
 
     //chequea que el nombre de usuario elegido no esté ya tomado por otro admin
     const yaExiste = await prisma.admin.findUnique({
@@ -253,12 +254,14 @@ export const cambiarCredenciales = async (req: Request, res:Response) => {
     //actualiza el nombre de usuario y marca el cambio como completado (debeCambiarCredenciales pasa a false, y el login ya no vuelve a exigir este paso la próxima vez)
     await prisma.admin.update({
         where: {id: adminId},
-        data: {nombreUsuario: nuevoUsuario, debeCambiarCredenciales:false},
+        data: {nombreUsuario: nuevoUsuario, debeCambiarCredenciales:false, correo},
     });
 
     await prisma.usuario.update({
         where: {id: adminId},
-        data: { contrasena: contrasenaHasheada},
+        data: { contrasena: contrasenaHasheada,
+            contrasenaActualizadaEn: new Date()
+        },
     })
 
     return res.json({mensaje: "Credenciales actualizadas correctamente"})
@@ -355,9 +358,16 @@ export const olvideContrasena = async (req: Request, res: Response) => {
     //guarda que tipo de cuenta es para incluirlo en el token
     const tipo = ciudadano ? "CIUDADANO" : "ADMIN";
 
+    //trae la fecha del ultimo cambio de contra de esta cuenta y mas adelante lo incluye en el token
+    //así, en caso de usarse un mismo link después de una actualización, el valor quedará desactualizado con respecto al de la base haciendo invalido al token aunque no haya vencido
+    const usuario = await prisma.usuario.findUnique({
+        where: { id: cuenta!.id},
+        select: { contrasenaActualizadaEn: true}
+    })
+
     //crea el token para que viaja en el link del correo y autorizar el reseteo de contra
     const token = jwt.sign(
-        { id: cuenta!.id, tipo },
+        { id: cuenta!.id, tipo, contrasenaActualizadaEn: usuario!.contrasenaActualizadaEn.getTime() },
         config.jwtSecret,
         { expiresIn: "1h"}
     );
@@ -386,11 +396,22 @@ export const restablecerContrasena = async (req: Request, res: Response) => {
     const { token, nuevaContrasena } = resultado.data;
 
     //intenta verificar que el token sea válido
-    let payload: { id: number; tipo: string} 
+    let payload: { id: number; tipo: string; contrasenaActualizadaEn: number} 
 
     try {
-        payload = jwt.verify(token, config.jwtSecret) as { id: number; tipo: string}
+        payload = jwt.verify(token, config.jwtSecret) as { id: number; tipo: string; contrasenaActualizadaEn: number}
     } catch (error) {
+        return res.status(400).json({ error: "El enlace no es válido o venció"})
+    }
+
+    //c
+    const usuarioActual = await prisma.usuario.findUnique({
+        where: { id: payload.id},
+        select: { contrasenaActualizadaEn: true},
+    })
+
+    //
+    if (!usuarioActual || usuarioActual.contrasenaActualizadaEn.getTime() !== payload.contrasenaActualizadaEn) {
         return res.status(400).json({ error: "El enlace no es válido o venció"})
     }
 
@@ -419,7 +440,9 @@ export const restablecerContrasena = async (req: Request, res: Response) => {
 
     await prisma.usuario.update({
         where: { id: payload.id},
-        data: { contrasena: contrasenaHasheada}
+        data: { contrasena: contrasenaHasheada,
+            contrasenaActualizadaEn: new Date()
+        }
     })
 
     return res.json({ mensaje: "Contraseña actualizada correctamente"})

@@ -26,7 +26,7 @@ export const enviarCorreoVerificacion = async ( correo: string, token: string) =
 
 
 export const enviarCorreoRecuperacion = async (correo: string, token: string) => {
-    const enlace = `http://localhost:${process.env.PUERTO}/restablecer-contrasena/${token}`;
+    const enlace = `http://localhost:9000/restablecer-contrasena/${token}`;
 
     //cuerpo del correo
     await transporter.sendMail({

@@ -43,6 +43,7 @@ model Usuario {
   nombreCompleto String @db.VarChar(100)
   contrasena String @db.VarChar(60)
   rol Rol
+  contrasenaActualizadaEn DateTime @default(now())
 
   ciudadano Ciudadano?
   funcionario Funcionario?
