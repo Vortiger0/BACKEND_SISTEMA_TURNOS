@@ -106,6 +106,7 @@ export const verificarCorreo = async (req: Request, res: Response) => {
 const loginSchema = z.object({
     identificador: z.string().min(1, "Ingresa tu correo o usuario"),
     contrasena: z.string().min(1, "Ingresa tu contraseña"),
+    esFuncionario: z.boolean()
 })
 
 export const login = async (req: Request, res: Response) => {
@@ -117,9 +118,17 @@ export const login = async (req: Request, res: Response) => {
 
     }
    
-    const { identificador, contrasena } = resultado.data;
+    const { identificador, contrasena, esFuncionario } = resultado.data;
     //si lo que escribió una persona tiene arroba quiere decir que se intentó logear como ciudadano, de lo contrario es un funcionario o admin (ingresa con usuario)
     const esCorreo = identificador.includes("@");
+
+    if (esFuncionario && esCorreo) {
+        return res.status(400).json({ error: "Estás intentando ingresar en el modo incorrecto. Cambiá a modo ciudadano"})
+    }
+
+    if (!esFuncionario && !esCorreo) {
+        return res.status(400).json( { error: "Estás intentando ingresar en el modo incorrecto. Cambiá a modo Funcionario/Admin"})
+    }
 
     
     let correoVerificado = true;
