@@ -48,6 +48,16 @@ model Usuario {
   funcionario Funcionario?
   admin Admin?
 }
+model PushSuscripcion {
+  id Int @id @default(autoincrement())
+  endpoint String @unique @db.VarChar(512)
+  p256dh String @db.VarChar(255)
+  auth String @db.VarChar(255)
+  ciudadanoId Int
+  creadoEn DateTime @default(now())
+ 
+  ciudadano Ciudadano @relation(fields: [ciudadanoId], references: [id], onDelete: Cascade)
+}
 
 model Ciudadano {
   id Int @id
@@ -62,6 +72,7 @@ model Ciudadano {
   usuario Usuario @relation(fields: [id], references: [id])
 
   turnos Turno[]
+  pushSuscripciones PushSuscripcion[] 
 }
 
 model Funcionario {
@@ -154,6 +165,7 @@ model Turno {
   ciudadanoId Int?
   //nullable porque un turno recien creado todavía no tiene algún funcionario asignado
   funcionarioId Int?
+  ultimaPosicionNotificada Int?    
 
   sucursal Sucursal @relation(fields: [sucursalId], references: [id])
   ciudadano Ciudadano? @relation(fields: [ciudadanoId], references: [id])

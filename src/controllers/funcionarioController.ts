@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { prisma } from "../prisma";
-
+import {notificarTurnoLlamado, notificarProgresoCola} from "../services/pushService";
 //confirma que quien está pidiendo "siguiente" sea un funcionario real
 export const siguienteTurno = async (req: Request, res: Response) => {
     const funcionarioId = req.usuario?.id;
@@ -58,6 +58,9 @@ export const siguienteTurno = async (req: Request, res: Response) => {
             llamadoEn: new Date(),
         }
     });
+    void notificarTurnoLlamado(turnoActualizado,funcionario.numeroCaja)
+        .then(()=>notificarProgresoCola(funcionario.sucursalId))
+        .catch((error)=>console.error("[push] Error tras llamar turnos",error))
     //devuelve el turno actualizado para que el front pueda mostrar en pantalla a quien se llama
     return res.json(turnoActualizado)
 };
