@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE `usuario` ADD COLUMN `contrasenaActualizadaEn` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3);

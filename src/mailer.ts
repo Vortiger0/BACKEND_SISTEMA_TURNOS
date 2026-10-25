@@ -23,3 +23,21 @@ export const enviarCorreoVerificacion = async ( correo: string, token: string) =
 
     })
 }
+
+
+export const enviarCorreoRecuperacion = async (correo: string, token: string) => {
+    const enlace = `http://localhost:9000/restablecer-contrasena/${token}`;
+
+    //cuerpo del correo
+    await transporter.sendMail({
+        from: process.env.GMAIL_USER,
+        to: correo,
+        subject: "Recuperación de contraseña - Sistema de turnos",
+        html: `
+            <h2>¿Olvidaste tu contraseña?</h2>
+            <p>Recibimos un pedido para restablecer tu contraseña. Si fuiste vos, hacé clic en el siguiente enlace (válido por 1 hora):</p>
+            <a href="${enlace}">Restablecer contraseña</a>
+            <p>Si no fuiste vos, podés ignorar este correo.</p>
+        `,
+    })
+}

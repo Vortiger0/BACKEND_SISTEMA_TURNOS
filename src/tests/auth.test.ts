@@ -8,7 +8,7 @@ describe("Login", () => {
     it("Rechaza el login con datos incorrectos", async () => {
         const respuesta = await request(app)
         .post("/api/auth/login")
-        .send({ identificador: "usuario.inexistente", contrasena: "12345678"})
+        .send({ identificador: "usuarioInexistente@gmail.com", contrasena: "12345678", esFuncionario: false})
         
         expect(respuesta.status).toBe(401);
         expect(respuesta.body.error).toBe("Datos incorrectos")
@@ -20,6 +20,7 @@ describe("Login", () => {
         .send({
             identificador: process.env.ADMIN_TESTING_USERNAME,
             contrasena: process.env.ADMIN_TESTING_PASSWORD,
+            esFuncionario: true
         })
 
         expect(respuesta.status).toBe(200)
@@ -37,3 +38,28 @@ describe("Mis turnos", () => {
         expect(respuesta.status).toBe(401);
     });
 });
+
+describe("Login - coherencia de modo", () => {
+    it ("rechaza si el switch dice Funcionario pero el identificador es un correo", async () => {
+        const respuesta = await request(app)
+            .post("/api/auth/login")
+            .send({
+                identificador: "correo@gmail.com",
+                contrasena: "12345678",
+                esFuncionario: true
+            })
+
+            expect(respuesta.status).toBe(400);
+    })
+
+    it( " rechaza si el switch dice Ciudadano pero el identificador no es un correo", async () => {
+        const respuesta = await request(app)
+            .post("/api/auth/login")
+            .send({
+                identificador: "usuario.SinArroba",
+                contrasena: "12345678",
+                esFuncionario:false,
+            })
+            expect(respuesta.status).toBe(400)
+    })
+})

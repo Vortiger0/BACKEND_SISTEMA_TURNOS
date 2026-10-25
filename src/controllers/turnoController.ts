@@ -1,6 +1,7 @@
 import type {Request, Response} from "express";
 import { prisma } from "../prisma"
 import {z} from "zod";
+import { notificarProgresoCola } from "../services/pushService";
 
 
 const sacarTurnoSchema = z.object({
@@ -243,5 +244,63 @@ export const cancelarTurno = async (req: Request, res: Response) => {
         where: {id: turnoId},
         data: {estado: "CANCELADO"},
     });
+    void notificarProgresoCola(turno.sucursalId);
     return res.json({mensaje: "Turno cancelado correctamente"})
 }
+
+// Función para devolver la fila virtual con 5 turnos previos activos actuales hacia el front
+export const obtenerFilaVirtual = async (req: Request, res: Response) => {
+    const ciudadanoId = req.usuario?.id
+
+    if (!ciudadanoId) {
+        return res.status(401).json({ error: "No autenticado"})
+    }
+
+    const { id } = req.params;
+
+    if (!id) {
+        return res.status(400).json({ error: "Falta el id del turno" });
+    }
+
+    const turnoIdNum = Number(id);
+
+    if (isNaN(turnoIdNum)) {
+        return res.status(400).json({ error: "El id del turno no es válido" });
+    }
+
+    const turnoUsuario = await prisma.turno.findUnique({
+        where: { id: turnoIdNum },
+        select: { id: true, sucursalId: true, numero: true, ciudadanoId: true }
+    });
+
+    if (!turnoUsuario || turnoUsuario.ciudadanoId !== ciudadanoId) {
+        return res.status(404).json({ error: "Turno no encontrado" });
+    }
+
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+
+    const turnosPrevios = await prisma.turno.findMany({
+        where: {
+            sucursalId: turnoUsuario.sucursalId,
+            estado: { in: ["ACTIVO"] }, // Solo los que están activos/en espera
+            creadoEn: { gte: hoy },     // Creados hoy
+            numero: { lt: turnoUsuario.numero } // Números anteriores al de la persona que consulta la fila
+        },
+        orderBy: {
+            numero: 'desc' // Del más cercano a la persona hacia atrás (ej: 3, 2, 1)
+        },
+        take: 5,     // Tomamos los 5 turnos con su ID, NRO, Fecha de creación y ESTADO
+        select: {
+            id: true,
+            numero: true,
+            creadoEn: true,
+            estado: true
+        }
+    });
+
+    return res.json({
+        miTurno: turnoUsuario.numero,
+        filaVirtual: turnosPrevios
+    });
+};

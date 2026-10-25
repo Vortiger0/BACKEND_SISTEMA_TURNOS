@@ -2,7 +2,7 @@ import type { Request, Response } from 'express';
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { config } from "../config";
-import { enviarCorreoVerificacion } from "../mailer";
+import { enviarCorreoVerificacion, enviarCorreoRecuperacion } from "../mailer";
 import { z } from "zod";
 import { prisma } from "../prisma";
 
@@ -106,6 +106,7 @@ export const verificarCorreo = async (req: Request, res: Response) => {
 const loginSchema = z.object({
     identificador: z.string().min(1, "Ingresa tu correo o usuario"),
     contrasena: z.string().min(1, "Ingresa tu contraseña"),
+    esFuncionario: z.boolean()
 })
 
 export const login = async (req: Request, res: Response) => {
@@ -117,9 +118,17 @@ export const login = async (req: Request, res: Response) => {
 
     }
    
-    const { identificador, contrasena } = resultado.data;
+    const { identificador, contrasena, esFuncionario } = resultado.data;
     //si lo que escribió una persona tiene arroba quiere decir que se intentó logear como ciudadano, de lo contrario es un funcionario o admin (ingresa con usuario)
     const esCorreo = identificador.includes("@");
+
+    if (esFuncionario && esCorreo) {
+        return res.status(400).json({ error: "Estás intentando ingresar en el modo incorrecto. Cambiá a modo ciudadano"})
+    }
+
+    if (!esFuncionario && !esCorreo) {
+        return res.status(400).json( { error: "Estás intentando ingresar en el modo incorrecto. Cambiá a modo Funcionario/Admin"})
+    }
 
     
     let correoVerificado = true;
@@ -219,7 +228,8 @@ export const login = async (req: Request, res: Response) => {
 
 const cambiarCredencialesSchema = z.object({
     nuevoUsuario: z.string().min(3, "El usuario debe tener al menos 3 caracteres"),
-    nuevaContrasena: z.string().min(8, "La contraseña debe tener al menos 8 caracteres")
+    nuevaContrasena: z.string().min(8, "La contraseña debe tener al menos 8 caracteres"),
+    correo: z.email("El correo no es válido")
 })
 //para admins tras el primer login
 export const cambiarCredenciales = async (req: Request, res:Response) => {
@@ -236,7 +246,7 @@ export const cambiarCredenciales = async (req: Request, res:Response) => {
     if (!resultado.success) {
         return res.status(400).json({error: resultado.error.issues[0]?.message});
     }
-    const { nuevoUsuario, nuevaContrasena} = resultado.data;
+    const { nuevoUsuario, nuevaContrasena, correo} = resultado.data;
 
     //chequea que el nombre de usuario elegido no esté ya tomado por otro admin
     const yaExiste = await prisma.admin.findUnique({
@@ -253,12 +263,14 @@ export const cambiarCredenciales = async (req: Request, res:Response) => {
     //actualiza el nombre de usuario y marca el cambio como completado (debeCambiarCredenciales pasa a false, y el login ya no vuelve a exigir este paso la próxima vez)
     await prisma.admin.update({
         where: {id: adminId},
-        data: {nombreUsuario: nuevoUsuario, debeCambiarCredenciales:false},
+        data: {nombreUsuario: nuevoUsuario, debeCambiarCredenciales:false, correo},
     });
 
     await prisma.usuario.update({
         where: {id: adminId},
-        data: { contrasena: contrasenaHasheada},
+        data: { contrasena: contrasenaHasheada,
+            contrasenaActualizadaEn: new Date()
+        },
     })
 
     return res.json({mensaje: "Credenciales actualizadas correctamente"})
@@ -315,3 +327,132 @@ export const quienSoy = async (req: Request, res: Response) => {
 
     return res.status(400).json({ error: "Rol desconocido" });
 };
+
+
+
+
+//ep para casos de olvido de contraseña
+
+//se valida el formato del correo
+const olvideContrasenaSchema = z.object({
+    correo: z.email("El correo no es válido")
+})
+
+export const olvideContrasena = async (req: Request, res: Response) => {
+    const resultado = olvideContrasenaSchema.safeParse(req.body);
+
+    if (!resultado.success) {
+        return res.status(400).json({ error: resultado.error.issues[0]?.message})
+
+    }
+
+    const { correo } = resultado.data;
+
+    const ciudadano = await prisma.ciudadano.findUnique({
+        where: { correo },
+    })
+
+    //busca primero en ciudadano si el correo asociado corresponde, si no era, busca en admin.
+    const admin = ciudadano ? null : await prisma.admin.findUnique({
+        where: { correo },
+    })
+
+    if (!ciudadano && !admin) {
+        //aunque no encuentre nada, por motivos de seguridad muestra mensaje generico
+        return res.json({ mensaje: "Si el correo existe, te enviamos un enlace de recuperación"})
+    }
+
+    //cuenta tiene alguno de los dos valores.
+    const cuenta = ciudadano ?? admin;
+    //guarda que tipo de cuenta es para incluirlo en el token
+    const tipo = ciudadano ? "CIUDADANO" : "ADMIN";
+
+    //trae la fecha del ultimo cambio de contra de esta cuenta y mas adelante lo incluye en el token
+    //así, en caso de usarse un mismo link después de una actualización, el valor quedará desactualizado con respecto al de la base haciendo invalido al token aunque no haya vencido
+    const usuario = await prisma.usuario.findUnique({
+        where: { id: cuenta!.id},
+        select: { contrasenaActualizadaEn: true}
+    })
+
+    //crea el token para que viaja en el link del correo y autorizar el reseteo de contra
+    const token = jwt.sign(
+        { id: cuenta!.id, tipo, contrasenaActualizadaEn: usuario!.contrasenaActualizadaEn.getTime() },
+        config.jwtSecret,
+        { expiresIn: "1h"}
+    );
+
+    //funcion que apunta a la pantalla de reestablecimiento de contra
+    await enviarCorreoRecuperacion(correo, token)
+
+    return res.json({ mensaje: "Si el correo existe, te enviamos un enlace de recuperación."})
+    
+}
+
+const restabelcerContrasenaSchema = z.object({
+    token: z.string().min(1, "Falta el token"),
+    nuevaContrasena: z.string().min(8, "La contraseña debe tener al menos 8 caracteres")
+})
+
+export const restablecerContrasena = async (req: Request, res: Response) => {
+    //recibe los datos que llegaron en el pedido y lo compara con las reglas establecidas
+    const resultado = restabelcerContrasenaSchema.safeParse(req.body);
+
+    if (!resultado.success) {
+        return res.status(400).json({ error: resultado.error.issues[0]?.message})
+    }
+
+    
+    const { token, nuevaContrasena } = resultado.data;
+
+    //intenta verificar que el token sea válido
+    let payload: { id: number; tipo: string; contrasenaActualizadaEn: number} 
+
+    try {
+        payload = jwt.verify(token, config.jwtSecret) as { id: number; tipo: string; contrasenaActualizadaEn: number}
+    } catch (error) {
+        return res.status(400).json({ error: "El enlace no es válido o venció"})
+    }
+
+    //c
+    const usuarioActual = await prisma.usuario.findUnique({
+        where: { id: payload.id},
+        select: { contrasenaActualizadaEn: true},
+    })
+
+    //
+    if (!usuarioActual || usuarioActual.contrasenaActualizadaEn.getTime() !== payload.contrasenaActualizadaEn) {
+        return res.status(400).json({ error: "El enlace no es válido o venció"})
+    }
+
+    //comprobamos por si acaso si la cuenta sigue existiendo en la bd entre el tiempo que se mandó el correo y se usó el link 
+    if (payload.tipo === "CIUDADANO") {
+        const ciudadano = await prisma.ciudadano.findUnique({
+            where: { id: payload.id}
+        })
+
+        if (!ciudadano) {
+            return res.status(404).json({ error: "Cuenta no encontrada"})
+        }
+    }
+
+    if (payload.tipo === "ADMIN") {
+        const admin = await prisma.admin.findUnique({
+            where: { id: payload.id}
+        })
+
+        if (!admin) {
+            return res.status(404).json({ error: "Cuenta no encontrada"})
+        }
+    }
+
+    const contrasenaHasheada = await bcrypt.hash(nuevaContrasena, 10)
+
+    await prisma.usuario.update({
+        where: { id: payload.id},
+        data: { contrasena: contrasenaHasheada,
+            contrasenaActualizadaEn: new Date()
+        }
+    })
+
+    return res.json({ mensaje: "Contraseña actualizada correctamente"})
+}

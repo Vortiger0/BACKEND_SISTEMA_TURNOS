@@ -106,8 +106,8 @@ async function main(){
             data: {
                 diaSemana: dia,
                 atiende: true,
-                horaDesde: new Date("1970-01-01T09:00:00"),
-                horaHasta: new Date("1970-01-01T18:00:00"),
+                horaDesde: new Date("1970-01-01T09:00:00Z"),
+                horaHasta: new Date("1970-01-01T18:00:00Z"),
                 sucursalId: sucursal.id,
             },
         });
@@ -217,6 +217,24 @@ for (const datos of funcionariosData) {
         },
     });
 
+
+    const contraHashCiudadano = await bcrypt.hash(process.env.CIUDADANO_TESTING_PASSWORD!, 10)
+
+    const usuarioCiudadanoTesting = await prisma.usuario.create({
+        data: {
+            nombreCompleto: "Ciudadano de testing",
+            contrasena: contraHashCiudadano,
+            rol: "CIUDADANO"
+        }
+    })
+
+    await prisma.ciudadano.create({
+        data: {
+            id: usuarioCiudadanoTesting.id,
+            correo: process.env.CIUDADANO_TESTING_EMAIL!,
+            correoVerificado: true,
+        }
+    })
 
 
  }
