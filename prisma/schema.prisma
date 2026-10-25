@@ -48,14 +48,20 @@ model Usuario {
   funcionario Funcionario?
   admin Admin?
 }
+
+//sirve para guardar cada suscripción (dispositivo/navegador) que un ciudadano agregó para recibir avisos
+//necesario porque un mismo ciudadano puede tener varios dispositivos a la vez
 model PushSuscripcion {
   id Int @id @default(autoincrement())
+  //identifica un dispositivo concreto
   endpoint String @unique @db.VarChar(512)
+  //las dos claves que usa el dispositivo para que el mensaje se cifre y solo él pueda leerlo
   p256dh String @db.VarChar(255)
   auth String @db.VarChar(255)
   ciudadanoId Int
   creadoEn DateTime @default(now())
  
+ //cascade para que si se borra el ciudadano, sus suscripciones se borren solas
   ciudadano Ciudadano @relation(fields: [ciudadanoId], references: [id], onDelete: Cascade)
 }
 
