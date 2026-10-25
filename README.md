@@ -57,17 +57,19 @@ Emite turnos numéricos correlativos por sucursal (sin reserva de fecha/hora, si
 
 ## Estructura del proyecto
 
+```text
 src/
-controllers/ # Lógica de cada endpoint, por rol/dominio
-routes/ # Definición de rutas de Express
-middlewares/ # Autenticación (JWT), autorización por rol
-services/ # Lógica reutilizable (p. ej. envío de notificaciones push)
-jobs/ # Tareas programadas (cron) — cierre de turnos vencidos
-types/ # Extensiones de tipos (Express, etc.)
-tests/ # Tests de integración con Vitest + Supertest
+  controllers/   # Lógica de cada endpoint, por rol/dominio
+  routes/        # Definición de rutas de Express
+  middlewares/   # Autenticación (JWT), autorización por rol
+  services/      # Lógica reutilizable (p. ej. envío de notificaciones push)
+  jobs/          # Tareas programadas (cron) — cierre de turnos vencidos
+  types/         # Extensiones de tipos (Express, etc.)
+  tests/         # Tests de integración con Vitest + Supertest
 prisma/
-schema.prisma # Modelo de datos
-migrations/ # Historial de migraciones
+  schema.prisma  # Modelo de datos
+  migrations/    # Historial de migraciones
+```
 
 
 ## Roles y módulos principales
