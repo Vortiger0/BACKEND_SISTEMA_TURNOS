@@ -1,6 +1,7 @@
 import type {Request, Response} from "express";
 import { prisma } from "../prisma"
 import {z} from "zod";
+import { notificarProgresoCola } from "../services/pushService";
 
 
 const sacarTurnoSchema = z.object({
@@ -243,6 +244,7 @@ export const cancelarTurno = async (req: Request, res: Response) => {
         where: {id: turnoId},
         data: {estado: "CANCELADO"},
     });
+    void notificarProgresoCola(turno.sucursalId);
     return res.json({mensaje: "Turno cancelado correctamente"})
 }
 

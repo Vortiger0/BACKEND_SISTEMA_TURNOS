@@ -50,6 +50,22 @@ model Usuario {
   admin Admin?
 }
 
+//sirve para guardar cada suscripción (dispositivo/navegador) que un ciudadano agregó para recibir avisos
+//necesario porque un mismo ciudadano puede tener varios dispositivos a la vez
+model PushSuscripcion {
+  id Int @id @default(autoincrement())
+  //identifica un dispositivo concreto
+  endpoint String @unique @db.VarChar(512)
+  //las dos claves que usa el dispositivo para que el mensaje se cifre y solo él pueda leerlo
+  p256dh String @db.VarChar(255)
+  auth String @db.VarChar(255)
+  ciudadanoId Int
+  creadoEn DateTime @default(now())
+ 
+ //cascade para que si se borra el ciudadano, sus suscripciones se borren solas
+  ciudadano Ciudadano @relation(fields: [ciudadanoId], references: [id], onDelete: Cascade)
+}
+
 model Ciudadano {
   id Int @id
   correo String @unique @db.VarChar(255)
@@ -63,6 +79,7 @@ model Ciudadano {
   usuario Usuario @relation(fields: [id], references: [id])
 
   turnos Turno[]
+  pushSuscripciones PushSuscripcion[]
 }
 
 model Funcionario {
@@ -156,6 +173,10 @@ model Turno {
   ciudadanoId Int?
   //nullable porque un turno recien creado todavía no tiene algún funcionario asignado
   funcionarioId Int?
+
+  //última posición de la fila que se le avisó a este turno (null = nunca se le avisó nada todavía)
+  ultimaPosicionNotificada Int?
+
 
   sucursal Sucursal @relation(fields: [sucursalId], references: [id])
   ciudadano Ciudadano? @relation(fields: [ciudadanoId], references: [id])
