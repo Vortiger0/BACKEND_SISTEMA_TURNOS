@@ -651,9 +651,17 @@ export const obtenerResumenInicio = async (req: Request, res: Response) => {
         }
     })
 
+    //estado del local en la pantalla inicio de admin
    let estadoLocal = "Cerrado";
+
+   const esExcepcionHoy = await prisma.excepcion.findFirst({
+    where: {
+        sucursalId: admin.sucursalId,
+        fecha: hoy
+    }
+   })
    
-   if (horarioHoy && horarioHoy.atiende) {
+   if (!esExcepcionHoy && horarioHoy && horarioHoy.atiende) {
     const ahora = new Date()
     const horaActual = ahora.getHours() * 60 + ahora.getMinutes();
 

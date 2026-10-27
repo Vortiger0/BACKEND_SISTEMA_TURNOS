@@ -18,6 +18,30 @@ const calcularConcurrencia = (
     return "Muy ocupado"
 }
 
+//recibe los 7 horarios de una sucursal y más adelante recibe si tiene una excepcion hoy, y devuelve "Abierto" o "Cerrado" según corresponda
+const diasSemana = [
+    "DOMINGO", "LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES", "SABADO"
+] as const;
+
+const calcularEstadoLocal = (
+    horarios: Horario[],
+    tieneExcepcionHoy: boolean,
+): string => {
+    if (tieneExcepcionHoy) return "Cerrado";
+
+    const diaActual = diasSemana[new Date().getDay()];
+    const horarioHoy = horarios.find((h) => h.diaSemana === diaActual)
+
+    if (!horarioHoy || !horarioHoy.atiende) return "Cerrado";
+
+    const ahora = new Date()
+    const horaActual = ahora.getHours() * 60 + ahora.getMinutes();
+    const horaDesdeMinutos = horarioHoy.horaDesde.getUTCHours() * 60 + horarioHoy.horaDesde.getUTCMinutes();
+    const horaHastaMinutos = horarioHoy.horaHasta.getUTCHours() * 60 + horarioHoy.horaHasta.getUTCMinutes();
+
+    return (horaActual >= horaDesdeMinutos && horaActual <= horaHastaMinutos) ? "Abierto" : "Cerrado";
+}
+
 // recibe un array con los horarios y devuelve un string que será el texto que se mostrará en la vista previa
 // como "Lun a Vie: 09:00-18:00" por ej."
 const formatearHorarios = (horarios: Horario[]): string => {
@@ -107,6 +131,19 @@ export const listarSucursales = async (req: Request, res:Response) => {
             }
         }
     })
+
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0)
+
+    const excepcionesHoy = await prisma.excepcion.findMany({
+        where: {
+            fecha: hoy,
+            sucursalId: { in: sucursales.map((s) => s.id )}
+        }
+    })
+
+    const sucursalesConExcepcionHoy = new Set(excepcionesHoy.map((e) => e.sucursalId))
+
     //map es una propiedad que recorre un array para entregar un resultado más simple con solo los campos que el frontend necesita
     const resultado = sucursales.map((sucursal) => ({
     id: sucursal.id,
@@ -122,7 +159,8 @@ export const listarSucursales = async (req: Request, res:Response) => {
         sucursal._count.turnos,
         sucursal.umbralPocoOcupado,
         sucursal.umbralOcupado
-    )
+    ),
+    estadoLocal: calcularEstadoLocal(sucursal.horarios, sucursalesConExcepcionHoy.has(sucursal.id))
 })) 
     return res.json(resultado);
 
