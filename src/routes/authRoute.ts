@@ -2,7 +2,6 @@ import express from "express";
 import { registrarCiudadano, verificarCorreo, login, cambiarCredenciales, quienSoy, olvideContrasena, restablecerContrasena } from '../controllers/authController';
 import { verificarToken } from "../middlewares/authMiddleware";
 import { rateLimit } from "express-rate-limit";
-import { error } from "node:console";
 
 const router: express.Router = express.Router();
 

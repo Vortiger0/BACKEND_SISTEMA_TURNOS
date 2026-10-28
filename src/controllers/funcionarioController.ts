@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { prisma } from "../prisma";
 import { notificarTurnoLlamado, notificarProgresoCola } from "../services/pushService";
+import {io} from "../socket"
 
 //confirma que quien está pidiendo "siguiente" sea un funcionario real
 export const siguienteTurno = async (req: Request, res: Response) => {
@@ -34,6 +35,8 @@ export const siguienteTurno = async (req: Request, res: Response) => {
             where: {id: turnoEnAtencion.id},
             data: { estado: "FINALIZADO"},
         }); 
+        //el turno cerrado debe desaparecer de mis turnos
+        io.emit ("cola-actualizada", { sucursalId: funcionario.sucursalId}) 
     }
     //busca el próximo turno esperado en la fila de la sucursal 
     const siguienteTurno = await prisma.turno.findFirst({
@@ -62,6 +65,10 @@ export const siguienteTurno = async (req: Request, res: Response) => {
     void notificarTurnoLlamado(turnoActualizado,funcionario.numeroCaja)
         .then(()=>notificarProgresoCola(funcionario.sucursalId))
         .catch((error)=>console.error("[push] Error tras llamar turnos",error))
+
+    //la tv debe mostrar el nuevo numero llamado
+    io.emit("cola-actualizada", { sucursalId: funcionario.sucursalId})
+
     //devuelve el turno actualizado para que el front pueda mostrar en pantalla a quien se llama
     return res.json(turnoActualizado)
 
@@ -148,5 +155,6 @@ export const marcarAusente = async (req: Request, res: Response ) => {
         }
     }
 
+    io.emit("cola-actualizada", { sucursalId: turnoEnAtencion.sucursalId}) //libera el cupo y la caja vuelve al estado de espera en la tv
     return res.json({ mensaje: "Turno marcado como ausente"})
 }

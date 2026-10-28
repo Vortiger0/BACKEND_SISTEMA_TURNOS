@@ -2,6 +2,7 @@ import type {Request, Response} from "express";
 import { prisma } from "../prisma"
 import {z} from "zod";
 import { notificarProgresoCola } from "../services/pushService";
+import { io } from "../socket"
 
 
 const sacarTurnoSchema = z.object({
@@ -169,6 +170,8 @@ export const sacarTurno = async (req: Request, res: Response ) => {
             ciudadanoId: ciudadanoId ?? null,
         }
     })
+    //emit para avisar a la tv y catalogo del turno nuevo
+    io.emit("cola-actualizada"), { sucursalId}; 
     return res.status(201).json(turnoCreado);
 }   
 
@@ -245,6 +248,8 @@ export const cancelarTurno = async (req: Request, res: Response) => {
         data: {estado: "CANCELADO"},
     });
     void notificarProgresoCola(turno.sucursalId);
+    //libera un cupo, que el catalogo debe reflejar
+    io.emit("cola-actualizada", { sucursalId: turno.sucursalId})
     return res.json({mensaje: "Turno cancelado correctamente"})
 }
 
