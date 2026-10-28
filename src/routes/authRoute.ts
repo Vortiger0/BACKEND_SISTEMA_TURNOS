@@ -2,6 +2,7 @@ import express from "express";
 import { registrarCiudadano, verificarCorreo, login, cambiarCredenciales, quienSoy, olvideContrasena, restablecerContrasena } from '../controllers/authController';
 import { verificarToken } from "../middlewares/authMiddleware";
 import { rateLimit } from "express-rate-limit";
+import { error } from "node:console";
 
 const router: express.Router = express.Router();
 
@@ -13,12 +14,28 @@ const limiteLogin = rateLimit({
     legacyHeaders: false,
 })
 
-router.post("/registro", registrarCiudadano);
+const limiteRegistro = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 5,
+    message: { error: "Demasiados registros, intentá más tarde"},
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+})
+
+const limiteOlvideContrasena = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 3,
+    message: { error: "Demasiados pedidos de recuperación, intenta más tarde"},
+    standardHeaders: "draft-8",
+    legacyHeaders: false
+})
+
+router.post("/registro", limiteRegistro, registrarCiudadano);
 router.get("/verificar/:token", verificarCorreo);
 router.post("/login",limiteLogin, login);
 router.put("/cambiar-credenciales", verificarToken, cambiarCredenciales)
 router.get("/quien-soy", verificarToken, quienSoy)
-router.post("/olvide-contrasena", olvideContrasena)
+router.post("/olvide-contrasena", limiteOlvideContrasena, olvideContrasena)
 router.post("/restablecer-contrasena", restablecerContrasena)
 export default router;
 
