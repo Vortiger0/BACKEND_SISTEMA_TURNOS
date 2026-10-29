@@ -171,7 +171,7 @@ export const sacarTurno = async (req: Request, res: Response ) => {
         }
     })
     //emit para avisar a la tv y catalogo del turno nuevo
-    io.emit("cola-actualizada"), { sucursalId}; 
+    io?.emit("cola-actualizada", { sucursalId}) ; 
     return res.status(201).json(turnoCreado);
 }   
 
@@ -249,7 +249,7 @@ export const cancelarTurno = async (req: Request, res: Response) => {
     });
     void notificarProgresoCola(turno.sucursalId);
     //libera un cupo, que el catalogo debe reflejar
-    io.emit("cola-actualizada", { sucursalId: turno.sucursalId})
+    io?.emit("cola-actualizada", { sucursalId: turno.sucursalId})
     return res.json({mensaje: "Turno cancelado correctamente"})
 }
 
