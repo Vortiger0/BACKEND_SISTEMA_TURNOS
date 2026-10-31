@@ -12,7 +12,8 @@ import { prisma } from "../prisma";
 const registroSchema = z.object({
     nombreCompleto: z.string().min(1, "El nombre es obligatorio"),
     correo: z.email("El correo no es válido"),
-    contrasena: z.string().min(8, "La contraseña debe tener al menos 8 caracteres"),
+    contrasena: z.string().min(8, "La contraseña debe tener al menos 8 caracteres")
+                .regex(/[^A-Za-z0-9]/, "La contraseña debe tener al menos un carácter especial")
 })
 
 //esta funcion lo que hace es recibir los datos del ciudadano y validarlos para guardarlos en la bd de ser correctos
@@ -233,8 +234,10 @@ export const login = async (req: Request, res: Response) => {
 
 const cambiarCredencialesSchema = z.object({
     nuevoUsuario: z.string().min(3, "El usuario debe tener al menos 3 caracteres"),
-    nuevaContrasena: z.string().min(8, "La contraseña debe tener al menos 8 caracteres"),
+    nuevaContrasena: z.string().min(8, "La contraseña debe tener al menos 8 caracteres")
+                    .regex(/[^A-Za-z0-9]/, "La contraseña debe tener al menos un carácter especial"),
     correo: z.email("El correo no es válido")
+
 })
 //para admins tras el primer login
 export const cambiarCredenciales = async (req: Request, res:Response) => {
@@ -409,6 +412,8 @@ export const olvideContrasena = async (req: Request, res: Response) => {
 const restabelcerContrasenaSchema = z.object({
     token: z.string().min(1, "Falta el token"),
     nuevaContrasena: z.string().min(8, "La contraseña debe tener al menos 8 caracteres")
+                    .regex(/[^A-Za-z0-9]/, "La contraseña debe tener al menos un carácter especial")
+                    
 })
 
 export const restablecerContrasena = async (req: Request, res: Response) => {

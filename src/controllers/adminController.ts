@@ -261,6 +261,7 @@ export const crearExcepcion = async (req: Request, res: Response) => {
         nombreUsuario: z.string().min(3, "El usuario debe tener al menos 3 caracteres"),
         numeroCaja: z.number().int().positive(),
         contrasena: z.string().min(8, "La contraseña debe tener al menos 8 caracteres")
+                    .regex(/[^A-Za-z0-9]/, "La contraseña debe tener al menos un carácter especial")
     });
 
     //el admin da de alta a un funcionario nuevo asignandole, nombre, usuario, numero de caja y contra inicial
@@ -338,7 +339,8 @@ export const crearExcepcion = async (req: Request, res: Response) => {
         nombreCompleto: z.string().min(1, "El nombre es obligatorio"),
         nombreUsuario: z.string().min(3, "El usuario debe tener al menos 3 caracteres"),
         numeroCaja: z.number().int().positive(),
-        contrasena: z.string().min(8, "La contraseña debe tener al menos 8 caracteres").optional(),
+        contrasena: z.string().min(8, "La contraseña debe tener al menos 8 caracteres")
+        .regex(/[^A-Za-z0-9]/, "La contraseña debe tener al menos un carácter especial").optional(),
     })
 
     export const editarFuncionario = async (req: Request, res: Response) => {
