@@ -32,7 +32,12 @@ export const registrarCiudadano = async (req: Request, res: Response) => {
         where: { correo },
     });
 
-    if (ciudadanoExistente) {
+    //consulta si un admin ya no está usando este correo como su método de recuperacion
+    const correoEnAdmin = await prisma.admin.findUnique({
+        where: { correo }
+    })
+
+    if (ciudadanoExistente || correoEnAdmin) {
         return res.status(400).json({ error: "El correo ya está registrado" });
     }
 
@@ -255,6 +260,19 @@ export const cambiarCredenciales = async (req: Request, res:Response) => {
 
     if (yaExiste) {
         return res.status(400).json({error: "Ese nombre ya está en uso"})
+    }
+
+    //chequea que el correo elegido no esté en uso por un ciudadano o por otro admin
+    const correoEnCiudadano = await prisma.ciudadano.findUnique({
+        where: { correo}
+    })
+
+    const correoEnAdmin = await prisma.admin.findFirst({
+        where: { correo, id: { not:adminId}}
+    })
+
+    if (correoEnCiudadano  || correoEnAdmin){
+        return res.status(400).json({ error: "Ese correo ya está en uso"})
     }
 
     //hashea la nueva contra
