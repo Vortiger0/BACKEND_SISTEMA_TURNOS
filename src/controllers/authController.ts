@@ -256,13 +256,20 @@ export const cambiarCredenciales = async (req: Request, res:Response) => {
     }
     const { nuevoUsuario, nuevaContrasena, correo} = resultado.data;
 
-    //chequea que el nombre de usuario elegido no esté ya tomado por otro admin
-    const yaExiste = await prisma.admin.findUnique({
-        where: {nombreUsuario: nuevoUsuario}
+    //el nuevo usuario no puede estar usado por ningún admin, incluido él mismo,
+    //en el primer ingreso es obligatorio elegir un usuario distinto al temporal
+    const usuarioEnAdmin = await prisma.admin.findUnique({
+        where: { nombreUsuario: nuevoUsuario}
     })
 
-    if (yaExiste) {
-        return res.status(400).json({error: "Ese nombre ya está en uso"})
+    //tampoco por un funcionario, el login busca primero en funcionario,
+    //así que si se repitiera, este admin ya no podría volver a entrar
+    const usuarioEnFuncionario = await prisma.funcionario.findUnique({
+        where: { nombreUsuario: nuevoUsuario}
+    })
+
+    if (usuarioEnAdmin || usuarioEnFuncionario) {
+        return res.status(400).json({ error: "Ese nombre ya está en uso"})
     }
 
     //chequea que el correo elegido no esté en uso por un ciudadano o por otro admin

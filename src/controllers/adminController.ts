@@ -4,6 +4,7 @@ import {z} from "zod";
 import bcrypt from "bcryptjs";
 
 
+
 //valida los datos del día individual dentro del array horarios, que día de la semana es, si atiende ese día y en qué horario
 const horarioDiaSchema = z.object({
     diaSemana: z.enum(["LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES", "SABADO", "DOMINGO"]),
@@ -288,6 +289,22 @@ export const crearExcepcion = async (req: Request, res: Response) => {
 
     const {nombreCompleto, nombreUsuario, numeroCaja, contrasena} = resultado.data
 
+    //el nombre de usuario tiene que ser único entre funcionarios y admins juntos
+    //debido a que el login usa el mismo campo para los dos, busca primero en funcionario, si hubiera un admin y un func
+    //con el mismo usuario, el admin con ese nombre no podría entrar 
+    const usuarioEnFuncionario = await prisma.funcionario.findUnique({
+        where: { nombreUsuario }
+    })
+
+    const usuarioEnAdmin = await prisma.admin.findUnique({
+        where: { nombreUsuario}
+    })
+
+    //si ya lo usa cualquiera de los dos, corta aquí
+    if (usuarioEnFuncionario || usuarioEnAdmin) {
+        return res.status(400).json({ error: "Usuario existente"})
+    }
+
     //se debe validar que numeroCaja no supere a cantidadCajas y que no esté ocupada
     const sucursal = await prisma.sucursal.findUnique({
         where: { id: admin.sucursalId}
@@ -416,6 +433,23 @@ export const crearExcepcion = async (req: Request, res: Response) => {
 
             if (cajaOcupada) {
                 return res.status(400).json({ error: "Esa caja ya está asignada a otro funcionario"})
+            }
+        }
+
+        //revisa el usuario si el admin le puso uno nuevo al funcionario
+        //si tiene el mismo no hace falta revisar y se rechaza la peticion
+        if (nombreUsuario !== funcionario.nombreUsuario) {
+            const usuarioEnFuncionario = await prisma.funcionario.findUnique({
+                where: { nombreUsuario}
+            })
+
+            //el usuario nuevo no puede estar en uso por otro funcionario o admin
+            const usuarioEnAdmin = await prisma.admin.findUnique({
+                where: { nombreUsuario}
+            })
+
+            if (usuarioEnFuncionario || usuarioEnAdmin) {
+                return res.status(400).json({ error: "Usuario existente"})
             }
         }
 

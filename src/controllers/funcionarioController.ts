@@ -158,3 +158,23 @@ export const marcarAusente = async (req: Request, res: Response ) => {
     io?.emit("cola-actualizada", { sucursalId: turnoEnAtencion.sucursalId}) //libera el cupo y la caja vuelve al estado de espera en la tv
     return res.json({ mensaje: "Turno marcado como ausente"})
 }
+
+//devuele el turno que este funcionario está atendiendo ahora mismo, o null si no tiene ninguno
+//su funcion es recuperar el turno si por alguna razon la pantalla se recarga, en lugar de arrancar vacía
+export const obtenerTurnoActual = async (req: Request, res: Response) => {
+
+    const funcionarioId = req.usuario?.id
+
+    if (!funcionarioId) {
+        return res.status(401).json({ error: "No autenticado"})
+    }
+
+    const turno = await prisma.turno.findFirst({
+        where: {
+            funcionarioId,
+            estado: "EN_ATENCION"
+        }
+    })
+
+    return res.json({ turno })
+}

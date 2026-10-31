@@ -1,6 +1,6 @@
 import express from "express";
 import { registrarCiudadano, verificarCorreo, login, cambiarCredenciales, quienSoy, olvideContrasena, restablecerContrasena } from '../controllers/authController';
-import { verificarToken } from "../middlewares/authMiddleware";
+import { verificarToken, verificarRol } from "../middlewares/authMiddleware";
 import { rateLimit } from "express-rate-limit";
 
 const router: express.Router = express.Router();
@@ -32,7 +32,7 @@ const limiteOlvideContrasena = rateLimit({
 router.post("/registro", limiteRegistro, registrarCiudadano);
 router.get("/verificar/:token", verificarCorreo);
 router.post("/login",limiteLogin, login);
-router.put("/cambiar-credenciales", verificarToken, cambiarCredenciales)
+router.put("/cambiar-credenciales", verificarToken, verificarRol(["ADMIN"]), cambiarCredenciales)
 router.get("/quien-soy", verificarToken, quienSoy)
 router.post("/olvide-contrasena", limiteOlvideContrasena, olvideContrasena)
 router.post("/restablecer-contrasena", restablecerContrasena)
