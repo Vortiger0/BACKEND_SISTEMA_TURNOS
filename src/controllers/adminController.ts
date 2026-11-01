@@ -2,6 +2,7 @@ import type {Request, Response} from "express";
 import {prisma} from "../prisma"
 import {z} from "zod";
 import bcrypt from "bcryptjs";
+import { error } from "node:console";
 
 
 
@@ -52,6 +53,40 @@ export const actualizarHorarios = async (req: Request, res: Response) => {
 
     if (umbralOcupado <= umbralPocoOcupado ) {
         return res.status(400).json({error: "El umbral de Ocupado debe ser mayor al de Poco Ocupado "})
+    }
+
+    //pasa horas a minutos para poderla comparar como números
+    const atMinutos = (hora: string) => {
+        const [h = 0, m = 0] = hora.split(":").map(Number)
+        return h * 60 + m
+    }
+
+    //el horario de apertura no puede estar después del horario de cierre, dicha acción se rechaza
+    for (const dia of horarios ) {
+        if (!dia.atiende) continue
+        
+        const desde = atMinutos(dia.horaDesde)
+        const hasta = atMinutos(dia.horaHasta)
+
+        if (desde >= hasta) {
+            return res.status(400).json({ error: `${dia.diaSemana}: la hora de inicio debe ser anterior a la de cierre` })
+        }
+
+        //el margen de corte no puede ser igual o inferior a la hora de apertura, si eso pasa se rechaza
+        if (hasta - margenCorte <= desde) {
+            return res.status(400).json({error: `${dia.diaSemana}: el margen de corte no deja tiempo para emitir turnos` })
+        }
+    }
+
+    //no se pueden reducir las cajas por debajo de una que ya tiene funcionario asignado
+    const cajaMasAlta = await prisma.funcionario.findFirst({
+        where: {sucursalId: admin.sucursalId},
+        orderBy: { numeroCaja: "desc"},
+        select: { numeroCaja: true},
+    })
+
+    if (cajaMasAlta && cantidadCajas < cajaMasAlta.numeroCaja) {
+        return res.status(400).json({ error: `La caja ${cajaMasAlta.numeroCaja} está asignada a un funcionario. Reasignalo o eliminalo antes de reducir las cajas`})
     }
 
     await prisma.sucursal.update({

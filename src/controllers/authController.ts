@@ -484,5 +484,14 @@ export const restablecerContrasena = async (req: Request, res: Response) => {
         }
     })
 
+    //si es un ciudadano, abrir el enlace que llega a su correo demuestra que el correo le pertenece, quedando verificada la cuenta
+    //de lo contrario, una cuenta que solo dependa del enlace de verificación podría quedar bloqueada para siempre.
+    if (payload.tipo === "CIUDADANO") {
+        await prisma.ciudadano.update({
+            where: { id: payload.id},
+            data: { correoVerificado: true}
+        })
+    }
+
     return res.json({ mensaje: "Contraseña actualizada correctamente"})
 }
