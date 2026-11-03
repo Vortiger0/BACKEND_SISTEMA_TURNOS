@@ -62,7 +62,22 @@ export const obtenerEstadoTV = async (req: Request, res: Response) => {
         numeroTurno: funcionario.turnos.length > 0 ? funcionario.turnos[0]!.numero : null,
     }))
 
-    return res.json({ nombreSucursal: sucursal.nombre, cajas })
+    //busca los prox 3 turnos en espera de hoy con estado ACTIVO
+    const turnosEnEspera = await prisma.turno.findMany({
+        where: {
+            sucursalId: sucursalIdNum,
+            creadoEn: { gte: hoy},
+            estado: "ACTIVO"
+        },
+        orderBy: { creadoEn: "asc"},
+        take: 3,
+        select: { numero: true}
+    })
+
+    //extrae unicamente los numeros en un array plano (ej: [4,5])
+    const proximosTurnos = turnosEnEspera.map(t => t.numero);
+
+    return res.json({ nombreSucursal: sucursal.nombre, cajas, proximosTurnos })
 
     
 }

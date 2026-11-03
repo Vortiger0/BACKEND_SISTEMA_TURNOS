@@ -102,16 +102,17 @@ async function main(){
 
 
     for (const dia of dias) {
-        await prisma.horario.create({
-            data: {
-                diaSemana: dia,
-                atiende: true,
-                horaDesde: new Date("1970-01-01T09:00:00Z"),
-                horaHasta: new Date("1970-01-01T18:00:00Z"),
-                sucursalId: sucursal.id,
-            },
-        });
-    }
+    const esTesting = datos.organismo === "TESTING";
+    await prisma.horario.create({
+        data: {
+            diaSemana: dia,
+            atiende: true,
+            horaDesde: new Date(esTesting ? "1970-01-01T00:00:00Z" : "1970-01-01T09:00:00Z"),
+            horaHasta: new Date(esTesting ? "1970-01-01T23:59:00Z" : "1970-01-01T18:00:00Z"),
+            sucursalId: sucursal.id,
+        },
+    });
+}
 }
 //admins de prueba 
 //primero crea los admins con sus datos y por cada uno chequea que la sucursal asociada exista

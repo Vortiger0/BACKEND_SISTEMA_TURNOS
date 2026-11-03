@@ -12,7 +12,8 @@ import { prisma } from "../prisma";
 const registroSchema = z.object({
     nombreCompleto: z.string().min(1, "El nombre es obligatorio"),
     correo: z.email("El correo no es válido"),
-    contrasena: z.string().min(8, "La contraseña debe tener al menos 8 caracteres"),
+    contrasena: z.string().min(8, "La contraseña debe tener al menos 8 caracteres")
+                .regex(/[^A-Za-z0-9]/, "La contraseña debe tener al menos un carácter especial")
 })
 
 //esta funcion lo que hace es recibir los datos del ciudadano y validarlos para guardarlos en la bd de ser correctos
@@ -32,7 +33,12 @@ export const registrarCiudadano = async (req: Request, res: Response) => {
         where: { correo },
     });
 
-    if (ciudadanoExistente) {
+    //consulta si un admin ya no está usando este correo como su método de recuperacion
+    const correoEnAdmin = await prisma.admin.findUnique({
+        where: { correo }
+    })
+
+    if (ciudadanoExistente || correoEnAdmin) {
         return res.status(400).json({ error: "El correo ya está registrado" });
     }
 
@@ -228,8 +234,10 @@ export const login = async (req: Request, res: Response) => {
 
 const cambiarCredencialesSchema = z.object({
     nuevoUsuario: z.string().min(3, "El usuario debe tener al menos 3 caracteres"),
-    nuevaContrasena: z.string().min(8, "La contraseña debe tener al menos 8 caracteres"),
+    nuevaContrasena: z.string().min(8, "La contraseña debe tener al menos 8 caracteres")
+                    .regex(/[^A-Za-z0-9]/, "La contraseña debe tener al menos un carácter especial"),
     correo: z.email("El correo no es válido")
+
 })
 //para admins tras el primer login
 export const cambiarCredenciales = async (req: Request, res:Response) => {
@@ -248,13 +256,33 @@ export const cambiarCredenciales = async (req: Request, res:Response) => {
     }
     const { nuevoUsuario, nuevaContrasena, correo} = resultado.data;
 
-    //chequea que el nombre de usuario elegido no esté ya tomado por otro admin
-    const yaExiste = await prisma.admin.findUnique({
-        where: {nombreUsuario: nuevoUsuario}
+    //el nuevo usuario no puede estar usado por ningún admin, incluido él mismo,
+    //en el primer ingreso es obligatorio elegir un usuario distinto al temporal
+    const usuarioEnAdmin = await prisma.admin.findUnique({
+        where: { nombreUsuario: nuevoUsuario}
     })
 
-    if (yaExiste) {
-        return res.status(400).json({error: "Ese nombre ya está en uso"})
+    //tampoco por un funcionario, el login busca primero en funcionario,
+    //así que si se repitiera, este admin ya no podría volver a entrar
+    const usuarioEnFuncionario = await prisma.funcionario.findUnique({
+        where: { nombreUsuario: nuevoUsuario}
+    })
+
+    if (usuarioEnAdmin || usuarioEnFuncionario) {
+        return res.status(400).json({ error: "Ese nombre ya está en uso"})
+    }
+
+    //chequea que el correo elegido no esté en uso por un ciudadano o por otro admin
+    const correoEnCiudadano = await prisma.ciudadano.findUnique({
+        where: { correo}
+    })
+
+    const correoEnAdmin = await prisma.admin.findFirst({
+        where: { correo, id: { not:adminId}}
+    })
+
+    if (correoEnCiudadano  || correoEnAdmin){
+        return res.status(400).json({ error: "Ese correo ya está en uso"})
     }
 
     //hashea la nueva contra
@@ -391,6 +419,8 @@ export const olvideContrasena = async (req: Request, res: Response) => {
 const restabelcerContrasenaSchema = z.object({
     token: z.string().min(1, "Falta el token"),
     nuevaContrasena: z.string().min(8, "La contraseña debe tener al menos 8 caracteres")
+                    .regex(/[^A-Za-z0-9]/, "La contraseña debe tener al menos un carácter especial")
+                    
 })
 
 export const restablecerContrasena = async (req: Request, res: Response) => {
@@ -453,6 +483,15 @@ export const restablecerContrasena = async (req: Request, res: Response) => {
             contrasenaActualizadaEn: new Date()
         }
     })
+
+    //si es un ciudadano, abrir el enlace que llega a su correo demuestra que el correo le pertenece, quedando verificada la cuenta
+    //de lo contrario, una cuenta que solo dependa del enlace de verificación podría quedar bloqueada para siempre.
+    if (payload.tipo === "CIUDADANO") {
+        await prisma.ciudadano.update({
+            where: { id: payload.id},
+            data: { correoVerificado: true}
+        })
+    }
 
     return res.json({ mensaje: "Contraseña actualizada correctamente"})
 }

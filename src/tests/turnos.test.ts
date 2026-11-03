@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import request from "supertest";
 import app from "../app";
+import { prisma } from "../prisma";
 
 describe("sacar turno", () => {
     it ("rechaza sacar turno en una sucursal que no existe", async () => {
@@ -22,6 +23,15 @@ describe("sacar turno", () => {
 
 describe("Cancelar turno" , () => {
     it ("rechaza cancelar un turno que no pertenece al usuario autenticado", async () => {
+
+        const ciudadanoTesting = await prisma.ciudadano.findUnique({ 
+            where: { correo: process.env.CIUDADANO_TESTING_EMAIL!}
+        });
+
+        if ( ciudadanoTesting) {
+            await prisma.turno.deleteMany({ where: { ciudadanoId: ciudadanoTesting.id}});
+        }
+
         const loginCiudadano = await request(app)
             .post("/api/auth/login")
             .send({

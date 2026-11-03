@@ -2,6 +2,8 @@ import type {Request, Response} from "express";
 import {prisma} from "../prisma"
 import {z} from "zod";
 import bcrypt from "bcryptjs";
+import { error } from "node:console";
+
 
 
 //valida los datos del día individual dentro del array horarios, que día de la semana es, si atiende ese día y en qué horario
@@ -51,6 +53,40 @@ export const actualizarHorarios = async (req: Request, res: Response) => {
 
     if (umbralOcupado <= umbralPocoOcupado ) {
         return res.status(400).json({error: "El umbral de Ocupado debe ser mayor al de Poco Ocupado "})
+    }
+
+    //pasa horas a minutos para poderla comparar como números
+    const atMinutos = (hora: string) => {
+        const [h = 0, m = 0] = hora.split(":").map(Number)
+        return h * 60 + m
+    }
+
+    //el horario de apertura no puede estar después del horario de cierre, dicha acción se rechaza
+    for (const dia of horarios ) {
+        if (!dia.atiende) continue
+        
+        const desde = atMinutos(dia.horaDesde)
+        const hasta = atMinutos(dia.horaHasta)
+
+        if (desde >= hasta) {
+            return res.status(400).json({ error: `${dia.diaSemana}: la hora de inicio debe ser anterior a la de cierre` })
+        }
+
+        //el margen de corte no puede ser igual o inferior a la hora de apertura, si eso pasa se rechaza
+        if (hasta - margenCorte <= desde) {
+            return res.status(400).json({error: `${dia.diaSemana}: el margen de corte no deja tiempo para emitir turnos` })
+        }
+    }
+
+    //no se pueden reducir las cajas por debajo de una que ya tiene funcionario asignado
+    const cajaMasAlta = await prisma.funcionario.findFirst({
+        where: {sucursalId: admin.sucursalId},
+        orderBy: { numeroCaja: "desc"},
+        select: { numeroCaja: true},
+    })
+
+    if (cajaMasAlta && cantidadCajas < cajaMasAlta.numeroCaja) {
+        return res.status(400).json({ error: `La caja ${cajaMasAlta.numeroCaja} está asignada a un funcionario. Reasignalo o eliminalo antes de reducir las cajas`})
     }
 
     await prisma.sucursal.update({
@@ -261,6 +297,7 @@ export const crearExcepcion = async (req: Request, res: Response) => {
         nombreUsuario: z.string().min(3, "El usuario debe tener al menos 3 caracteres"),
         numeroCaja: z.number().int().positive(),
         contrasena: z.string().min(8, "La contraseña debe tener al menos 8 caracteres")
+                    .regex(/[^A-Za-z0-9]/, "La contraseña debe tener al menos un carácter especial")
     });
 
     //el admin da de alta a un funcionario nuevo asignandole, nombre, usuario, numero de caja y contra inicial
@@ -286,6 +323,22 @@ export const crearExcepcion = async (req: Request, res: Response) => {
     }
 
     const {nombreCompleto, nombreUsuario, numeroCaja, contrasena} = resultado.data
+
+    //el nombre de usuario tiene que ser único entre funcionarios y admins juntos
+    //debido a que el login usa el mismo campo para los dos, busca primero en funcionario, si hubiera un admin y un func
+    //con el mismo usuario, el admin con ese nombre no podría entrar 
+    const usuarioEnFuncionario = await prisma.funcionario.findUnique({
+        where: { nombreUsuario }
+    })
+
+    const usuarioEnAdmin = await prisma.admin.findUnique({
+        where: { nombreUsuario}
+    })
+
+    //si ya lo usa cualquiera de los dos, corta aquí
+    if (usuarioEnFuncionario || usuarioEnAdmin) {
+        return res.status(400).json({ error: "Usuario existente"})
+    }
 
     //se debe validar que numeroCaja no supere a cantidadCajas y que no esté ocupada
     const sucursal = await prisma.sucursal.findUnique({
@@ -338,7 +391,8 @@ export const crearExcepcion = async (req: Request, res: Response) => {
         nombreCompleto: z.string().min(1, "El nombre es obligatorio"),
         nombreUsuario: z.string().min(3, "El usuario debe tener al menos 3 caracteres"),
         numeroCaja: z.number().int().positive(),
-        contrasena: z.string().min(8, "La contraseña debe tener al menos 8 caracteres").optional(),
+        contrasena: z.string().min(8, "La contraseña debe tener al menos 8 caracteres")
+        .regex(/[^A-Za-z0-9]/, "La contraseña debe tener al menos un carácter especial").optional(),
     })
 
     export const editarFuncionario = async (req: Request, res: Response) => {
@@ -414,6 +468,23 @@ export const crearExcepcion = async (req: Request, res: Response) => {
 
             if (cajaOcupada) {
                 return res.status(400).json({ error: "Esa caja ya está asignada a otro funcionario"})
+            }
+        }
+
+        //revisa el usuario si el admin le puso uno nuevo al funcionario
+        //si tiene el mismo no hace falta revisar y se rechaza la peticion
+        if (nombreUsuario !== funcionario.nombreUsuario) {
+            const usuarioEnFuncionario = await prisma.funcionario.findUnique({
+                where: { nombreUsuario}
+            })
+
+            //el usuario nuevo no puede estar en uso por otro funcionario o admin
+            const usuarioEnAdmin = await prisma.admin.findUnique({
+                where: { nombreUsuario}
+            })
+
+            if (usuarioEnFuncionario || usuarioEnAdmin) {
+                return res.status(400).json({ error: "Usuario existente"})
             }
         }
 
@@ -651,9 +722,17 @@ export const obtenerResumenInicio = async (req: Request, res: Response) => {
         }
     })
 
+    //estado del local en la pantalla inicio de admin
    let estadoLocal = "Cerrado";
+
+   const esExcepcionHoy = await prisma.excepcion.findFirst({
+    where: {
+        sucursalId: admin.sucursalId,
+        fecha: hoy
+    }
+   })
    
-   if (horarioHoy && horarioHoy.atiende) {
+   if (!esExcepcionHoy && horarioHoy && horarioHoy.atiende) {
     const ahora = new Date()
     const horaActual = ahora.getHours() * 60 + ahora.getMinutes();
 
