@@ -550,6 +550,17 @@ export const crearExcepcion = async (req: Request, res: Response) => {
 
         }
 
+        //valida que el funcionario no esté atendiendo a alguien en este momento, rechaza en ese caso.
+        const enAtencion = await prisma.turno.findFirst({
+            where: { funcionarioId: funcionarioId, estado: "EN_ATENCION"}
+        });
+
+        if (enAtencion) {
+            return res.status(400).json({ 
+                error: "No se puede eliminar un funcionario que está atendiendo un turno"
+            })
+        }
+
         //Luego de las validaciones y de encontrar al funcionario prosigue con la eliminación
         //primero "desvincula" todos los turnos que este funcionario haya atendido para que la bd no lo rechace el borrado por la relacion entre funcionario y turno
         await prisma.turno.updateMany({
