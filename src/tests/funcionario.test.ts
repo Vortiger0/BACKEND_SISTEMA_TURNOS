@@ -15,7 +15,7 @@ vi.mock('../socket', () => ({
 }));
 
 describe('Funcionario llama turnos y los marca como ausentes', () => {
-  it('Llama los turnos en orden de número y marca cada uno como AUSENTE', async () => {
+    it('Llama los turnos en orden y, al marcar AUSENTE, llama solo al próximo', async () => {
     const sufijo = Date.now();
 
     let sucursalId: number | undefined;
@@ -70,33 +70,49 @@ describe('Funcionario llama turnos y los marca como ausentes', () => {
         });
       }
 
-      // Debe llamarlos 1, 2, 3 (siempre el número más bajo pendiente)
-      for (const numeroEsperado of [1, 2, 3]) {
-        const resLlamar = await request(app)
-          .post('/api/funcionario/siguiente')
-          .set('Authorization', `Bearer ${token}`);
+            // El funcionario llama solo al primero: debe ser el #1 (siempre el número más bajo pendiente)
+      const resPrimero = await request(app)
+        .post('/api/funcionario/siguiente')
+        .set('Authorization', `Bearer ${token}`);
 
-        // resLlamar.text trae el stack trace de Express cuando hay un 500
-        expect(resLlamar.status, `siguiente respondió: ${resLlamar.text}`).toBe(200);
-        expect(resLlamar.body).toHaveProperty('numero', numeroEsperado);
-        expect(resLlamar.body).toHaveProperty('estado', 'EN_ATENCION');
-        expect(resLlamar.body).toHaveProperty('funcionarioId', usuario.id);
-        // avisa a la TV que cambió la cola
-        expect(io.emit).toHaveBeenCalledWith('cola-actualizada', { sucursalId: sucursal.id });
+      expect(resPrimero.status, `siguiente respondió: ${resPrimero.text}`).toBe(200);
+      expect(resPrimero.body).toHaveProperty('numero', 1);
+      expect(resPrimero.body).toHaveProperty('estado', 'EN_ATENCION');
+      expect(resPrimero.body).toHaveProperty('funcionarioId', usuario.id);
+      // avisa a la TV que cambió la cola
+      expect(io.emit).toHaveBeenCalledWith('cola-actualizada', { sucursalId: sucursal.id });
 
+      // Cada "ausente" marca el turno en atención y llama solo al próximo (1 -> 2, 2 -> 3)
+      for (const [ausente, proximo] of [[1, 2], [2, 3]] as const) {
         const resAusente = await request(app)
           .post('/api/funcionario/ausente')
           .set('Authorization', `Bearer ${token}`);
 
         expect(resAusente.status, `ausente respondió: ${resAusente.text}`).toBe(200);
-        expect(resAusente.body).toHaveProperty('mensaje', 'Turno marcado como ausente');
+        // la respuesta ahora es el turno que se llamó
+        expect(resAusente.body).toHaveProperty('numero', proximo);
+        expect(resAusente.body).toHaveProperty('estado', 'EN_ATENCION');
+        expect(resAusente.body).toHaveProperty('funcionarioId', usuario.id);
 
-        // La ruta no devuelve el turno, así que se verifica en la base
+        // el turno marcado como ausente se verifica en la base
         const turnoEnDb = await prisma.turno.findFirst({
-          where: { sucursalId: sucursal.id, numero: numeroEsperado },
+          where: { sucursalId: sucursal.id, numero: ausente },
         });
         expect(turnoEnDb?.estado).toBe('AUSENTE');
       }
+
+      // El último ausente (#3): ya no queda nadie para llamar
+      const resUltimo = await request(app)
+        .post('/api/funcionario/ausente')
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(resUltimo.status, `ausente respondió: ${resUltimo.text}`).toBe(200);
+      expect(resUltimo.body.mensaje).toContain('Turno marcado como ausente');
+
+      const ultimoEnDb = await prisma.turno.findFirst({
+        where: { sucursalId: sucursal.id, numero: 3 },
+      });
+      expect(ultimoEnDb?.estado).toBe('AUSENTE');
 
       // Ya no queda nadie en la fila
       const resVacio = await request(app)
