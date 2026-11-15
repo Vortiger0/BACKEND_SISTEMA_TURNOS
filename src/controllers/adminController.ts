@@ -2,7 +2,7 @@ import type {Request, Response} from "express";
 import {prisma} from "../prisma"
 import {z} from "zod";
 import bcrypt from "bcryptjs";
-import { error } from "node:console";
+
 
 
 
@@ -764,4 +764,118 @@ export const obtenerResumenInicio = async (req: Request, res: Response) => {
    })
 
 
+}
+
+//se ajusta la hora a la uruguaya para que devuelva las estadisticas correctas
+const aHoraUruguay = (fecha: Date) => new Date(fecha.getTime() - 3 * 60 * 60 * 1000); 
+
+export const obtenerEstadisticas = async (req: Request, res: Response) => {
+    const adminId = req.usuario?.id;
+
+    if (!adminId) {
+        return res.status(401).json({ error: "No autenticado" });
+    }
+
+    const admin = await prisma.admin.findUnique({
+        where: { id: adminId },
+    })
+
+    if (!admin) {
+        return res.status(404).json({ error: "Administrador no encontrado" });
+    }
+
+    //el periodo viene por la url, si no viene toma 15 por defecto
+    const diasRecibido = req.query.dias;
+    const dias = diasRecibido === undefined ? 15: Number(diasRecibido);
+
+    //valores de periodo permitidos
+    const periodosValidos = [15, 30, 90]
+
+    //si el periodo no es uno de los permitidos corta acá
+    if (!periodosValidos.includes(dias)) {
+        return res.status(400).json({ error: "El período debe ser 15, 30 o 90 días"})
+    }
+    
+    //calculo para saber desde que fecha contar
+    //cuenta el día de hoy como parte del periodo, por eso se resta 1
+    const desde = new Date();
+    desde.setHours(0,0,0,0);
+    desde.setDate(desde.getDate() - (dias - 1));
+
+
+    //trae los turnos terminados de la sucursal del admin dentro del periodo
+    const turnos = await prisma.turno.findMany({
+        where: {
+            sucursalId: admin.sucursalId,
+            creadoEn: { gte: desde},
+            estado: {in: ["FINALIZADO", "AUSENTE", "CANCELADO", "EXPIRADO"]},
+        },
+        select: {
+            creadoEn: true,
+            llamadoEn: true,
+            estado: true,
+
+        }
+    })
+
+    //cuenta cuantos turnos terminaron en cada estado concreto
+    const porEstado: Record<string, number> = {
+        FINALIZADO: 0,
+        AUSENTE: 0,
+        CANCELADO: 0,
+        EXPIRADO: 0,
+    }
+
+    for (const turno of turnos) {
+        porEstado[turno.estado] = (porEstado[turno.estado] ?? 0) + 1;
+
+    }
+
+    //contar los turnos que hubo por cada dia de la semana
+    const nombreDias = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+    const conteoDias = [ 0, 0, 0, 0, 0, 0, 0];
+
+    //recorre todos los turnos y suma 1 al dia de la semana correspondiente en donde haya caido el turno
+    for (const turno of turnos) {
+
+        const dia = aHoraUruguay(turno.creadoEn).getUTCDay();
+        conteoDias[dia] = (conteoDias[dia] ?? 0) + 1;
+    }
+
+    //une la cantidad con el dia concreto y devuelve la lista
+    const porDiaSemana = nombreDias.map((nombre, i) => ({
+        dia: nombre,
+        cantidad: conteoDias[i] ?? 0,
+    }));
+
+    //cuenta los turnos que hubo por cada mes dentro del periodo
+    const conteoMeses: Record<string, number> = {};
+
+    for (const turno of turnos) {
+        const fecha = aHoraUruguay(turno.creadoEn);
+        const mes = `${fecha.getUTCFullYear()}-${String(fecha.getUTCMonth() + 1).padStart(2, "0")}`;
+        conteoMeses[mes] = (conteoMeses[mes] ?? 0) + 1;
+    }
+
+    const porMes = Object.keys(conteoMeses).sort().map((mes) => ({
+        mes,
+        cantidad: conteoMeses[mes],
+    }));
+
+    //espera promedio en minutos, hace la diferencia entre que se sacó el turno hasta el momento en el que fue llamado
+    let sumaEsperaMs = 0;
+    let cantidadLlamados = 0;
+
+    for (const turno of turnos) {
+        if  (turno.llamadoEn) {
+            sumaEsperaMs += turno.llamadoEn.getTime() - turno.creadoEn.getTime();
+            cantidadLlamados++;
+        }
+    }
+
+    const esperaPromedioMin = cantidadLlamados === 0
+    ? 0
+    : Math.round((sumaEsperaMs / cantidadLlamados / 60000) * 10) / 10;
+
+    return res.json({ dias, desde, total:turnos.length, porEstado, porDiaSemana, porMes, esperaPromedioMin })
 }
