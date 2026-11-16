@@ -867,7 +867,7 @@ export const obtenerEstadisticas = async (req: Request, res: Response) => {
     let cantidadLlamados = 0;
 
     for (const turno of turnos) {
-        if  (turno.llamadoEn) {
+        if  (turno.llamadoEn && turno.llamadoEn >= turno.creadoEn) {
             sumaEsperaMs += turno.llamadoEn.getTime() - turno.creadoEn.getTime();
             cantidadLlamados++;
         }
