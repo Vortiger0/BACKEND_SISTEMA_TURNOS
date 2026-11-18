@@ -818,6 +818,23 @@ export const obtenerEstadisticas = async (req: Request, res: Response) => {
         }
     })
 
+    //ventana de 6 meses para contar los turnos, independiente del periodo seleccionado
+    const ahoraUY = aHoraUruguay(new Date());
+    const desdeMeses = new Date(Date.UTC(ahoraUY.getUTCFullYear(), ahoraUY.getUTCMonth() - 5, 1, 3, 0, 0))
+
+    //turnos terminados de los ultimos 6 meses
+    const turnosMeses = await prisma.turno.findMany({
+        where: {
+            sucursalId: admin.sucursalId,
+            creadoEn: { gte: desdeMeses},
+            estado: { in: ["FINALIZADO", "AUSENTE", "CANCELADO", "EXPIRADO"]},
+
+        },
+        select: { creadoEn: true}
+    })
+
+    
+
     //cuenta cuantos turnos terminaron en cada estado concreto
     const porEstado: Record<string, number> = {
         FINALIZADO: 0,
@@ -851,17 +868,20 @@ export const obtenerEstadisticas = async (req: Request, res: Response) => {
     //cuenta los turnos que hubo por cada mes dentro del periodo
     const conteoMeses: Record<string, number> = {};
 
-    for (const turno of turnos) {
+    for (const turno of turnosMeses) {
         const fecha = aHoraUruguay(turno.creadoEn);
         const mes = `${fecha.getUTCFullYear()}-${String(fecha.getUTCMonth() + 1).padStart(2, "0")}`;
         conteoMeses[mes] = (conteoMeses[mes] ?? 0) + 1;
     }
 
-    const porMes = Object.keys(conteoMeses).sort().map((mes) => ({
-        mes,
-        cantidad: conteoMeses[mes],
-    }));
+    //arma los 6 meses con 0 en lo que no tuvieron turnos
+    const porMes: { mes: string; cantidad: number}[] = []
 
+    for (let i = 5; i >= 0; i--) {
+        const fecha = new Date(Date.UTC(ahoraUY.getUTCFullYear(), ahoraUY.getUTCMonth() - i, 1));
+        const mes = `${fecha.getUTCFullYear()}-${String(fecha.getUTCMonth() + 1).padStart(2, "0")}`;
+        porMes.push({ mes, cantidad: conteoMeses[mes] ?? 0 });
+    }
     //espera promedio en minutos, hace la diferencia entre que se sacó el turno hasta el momento en el que fue llamado
     let sumaEsperaMs = 0;
     let cantidadLlamados = 0;
