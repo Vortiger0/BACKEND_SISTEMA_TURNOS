@@ -5,6 +5,8 @@ import app from "../app";
 
 //manda un pedido al login con un usuario que no existe para confirmar que el codigo y mensaje de error sean los adecuados.
 describe("Login", () => {
+
+    
     it("Rechaza el login con datos incorrectos", async () => {
         const respuesta = await request(app)
         .post("/api/auth/login")

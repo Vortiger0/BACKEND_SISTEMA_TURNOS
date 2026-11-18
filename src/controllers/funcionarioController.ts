@@ -3,6 +3,27 @@ import { prisma } from "../prisma";
 import { notificarTurnoLlamado, notificarProgresoCola } from "../services/pushService";
 import {io} from "../socket"
 
+//llama el numero en estado ACTIVO de la fila en la sucursal, lo pasa a EN_ATENCION
+//para este funcionario y avisa por push. Devuelve el turno, o null si no hay nadie esperando
+const llamarAlProximo = async (funcionario: { id: number; sucursalId: number; numeroCaja: number }) => {
+    const proximo = await prisma.turno.findFirst({
+        where: { sucursalId: funcionario.sucursalId, estado: "ACTIVO" },
+        orderBy: { numero: "asc" },
+    });
+    if (!proximo) return null;
+
+    const llamado = await prisma.turno.update({
+        where: { id: proximo.id },
+        data: { estado: "EN_ATENCION", funcionarioId: funcionario.id, llamadoEn: new Date() },
+    });
+
+    void notificarTurnoLlamado(llamado, funcionario.numeroCaja)
+        .then(() => notificarProgresoCola(funcionario.sucursalId))
+        .catch((error) => console.error("[push] Error tras llamar turnos", error));
+
+    return llamado;
+};
+
 //confirma que quien está pidiendo "siguiente" sea un funcionario real
 export const siguienteTurno = async (req: Request, res: Response) => {
     const funcionarioId = req.usuario?.id;
@@ -38,40 +59,17 @@ export const siguienteTurno = async (req: Request, res: Response) => {
         //el turno cerrado debe desaparecer de mis turnos
         io?.emit ("cola-actualizada", { sucursalId: funcionario.sucursalId}) 
     }
-    //busca el próximo turno esperado en la fila de la sucursal 
-    const siguienteTurno = await prisma.turno.findFirst({
-        where: {
-            sucursalId: funcionario.sucursalId,
-            estado: "ACTIVO"
-        },
-        // trae los numeros de menor a mayor, así combinado con findFirst trae el turno con el número más bajo pendiente
-        orderBy: {numero: "asc"}
-    });
+       const llamado = await llamarAlProximo(funcionario);
 
     //si no hay ninguno esperando a ser atendido retorna este mensaje
-    if (!siguienteTurno) {
+    if (!llamado) {
         return res.json({ mensaje: "No hay turnos esperando en la fila"})
     }
-
-    // al que llama pasa a estar en atencion, queda asignado al funcionario concreto y se registra el momento exacto en el que lo llamó
-    const turnoActualizado = await prisma.turno.update({
-        where: {id: siguienteTurno.id},
-        data: {
-            estado: "EN_ATENCION",
-            funcionarioId: funcionarioId,
-            llamadoEn: new Date(),
-        }
-    });
-    void notificarTurnoLlamado(turnoActualizado,funcionario.numeroCaja)
-        .then(()=>notificarProgresoCola(funcionario.sucursalId))
-        .catch((error)=>console.error("[push] Error tras llamar turnos",error))
 
     //la tv debe mostrar el nuevo numero llamado
     io?.emit("cola-actualizada", { sucursalId: funcionario.sucursalId})
 
-    //devuelve el turno actualizado para que el front pueda mostrar en pantalla a quien se llama
-    return res.json(turnoActualizado)
-
+    return res.json(llamado)
     
 };
 
@@ -80,6 +78,14 @@ export const marcarAusente = async (req: Request, res: Response ) => {
 
     if (!funcionarioId) {
         return res.status(401).json({ error: "No autenticado"})
+    }  
+      //hace falta el funcionario completo: se necesita su caja y su sucursal para llamar al próximo
+    const funcionario = await prisma.funcionario.findUnique({
+        where: { id: funcionarioId },
+    })
+
+    if (!funcionario) {
+        return res.status(404).json({ error: "Funcionario no encontrado"})
     }
 
     // busca si el funcionario concreto tiene un turno en atencion ahora mismo
@@ -155,8 +161,15 @@ export const marcarAusente = async (req: Request, res: Response ) => {
         }
     }
 
-    io?.emit("cola-actualizada", { sucursalId: turnoEnAtencion.sucursalId}) //libera el cupo y la caja vuelve al estado de espera en la tv
-    return res.json({ mensaje: "Turno marcado como ausente"})
+        //terminada la ausencia y la suspensión, llama solo al próximo número
+    const proximo = await llamarAlProximo(funcionario)
+
+    io?.emit("cola-actualizada", { sucursalId: turnoEnAtencion.sucursalId}) //libera el cupo y actualiza la tv
+
+    if (!proximo) {
+        return res.json({ mensaje: "Turno marcado como ausente. No hay más turnos esperando en la fila"})
+    }
+    return res.json(proximo)
 }
 
 //devuele el turno que este funcionario está atendiendo ahora mismo, o null si no tiene ninguno

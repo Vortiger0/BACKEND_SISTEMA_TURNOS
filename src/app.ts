@@ -9,7 +9,7 @@ import adminRoutes from "./routes/adminRoute"
 import tvRoutes from "./routes/tvRoute"
 import pushRoutes from "./routes/pushRoutes"
 
-const app: Express = express();
+const app: Express = express(); //
 
 app.use(helmet())
 app.use(express.json())
