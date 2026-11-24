@@ -64,7 +64,7 @@ describe("Cancelar turno" , () => {
                 .set("Authorization", `Bearer ${tokenAdmin}`)
 
             expect(turnoId, `turnoCreado completo: ${JSON.stringify(turnoCreado.body)}`).toBeDefined();
-expect(respuesta.status, `respuesta de cancelación: ${JSON.stringify(respuesta.body)}`).toBe(404);
+            expect(respuesta.status, `respuesta de cancelación: ${JSON.stringify(respuesta.body)}`).toBe(404);
 
     })
 } )

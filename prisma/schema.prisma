@@ -133,6 +133,7 @@ model Sucursal {
   horarios Horario[]
   excepciones Excepcion[]
   turnos Turno[]
+  totem Totem?
 
 }
 
@@ -182,4 +183,26 @@ model Turno {
   ciudadano Ciudadano? @relation(fields: [ciudadanoId], references: [id])
   funcionario Funcionario? @relation(fields: [funcionarioId], references: [id])
 
+}
+
+model Totem {
+  id Int @id @default(autoincrement())
+  sucursalId Int @unique
+
+  //si la sucursal se borra, el totem también se borra
+  sucursal Sucursal @relation(fields: [sucursalId], references: [id], onDelete: Cascade)
+  
+  //guarda hash (SHA256) del codigo de activacion, queda null si no hay un codigo pendiente de activacion
+  
+  codigoHash String? @db.VarChar(64)
+  //guarda fecha de generacion y vencimiento del codigo de activacion, null si no hay un codigo pendiente de activacion
+  codigoGeneradoEn DateTime?
+  codigoVenceEn DateTime?
+
+  //true si hay dispositivo autorizado funcionando; false si se generó un codigo nuevo (corta al dispositivo)
+  activo Boolean @default(false)
+  //fecha de activacion del dispositivo
+  activadoEn DateTime?
+  //aumenta cada vez que el admin genera un codigo o cancela; guarda la version con la que se emitió, si no coincide se rechaza
+  version Int @default(0)
 }
