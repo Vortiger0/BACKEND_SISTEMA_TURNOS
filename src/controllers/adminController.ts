@@ -899,3 +899,43 @@ export const obtenerEstadisticas = async (req: Request, res: Response) => {
 
     return res.json({ dias, desde, total:turnos.length, porEstado, porDiaSemana, porMes, esperaPromedioMin })
 }
+
+export const obtenerTotem = async (req: Request, res: Response) => {
+    const adminId = req.usuario?.id;
+
+    if (!adminId) {
+        return res.status(401).json({ error: "No autenticado" });
+    }
+
+    const admin = await prisma.admin.findUnique({
+        where: { id: adminId },
+    })
+
+    if (!admin) {
+        return res.status(404).json({ error: "Administrador no encontrado" });
+    }
+
+    try{
+        const totem = await prisma.totem.findUnique
+        ({ where: { sucursalId: admin.sucursalId } 
+        })
+
+        //marca el estado del totem, arranca por defecto en SIN_TOTEM
+        let estado: "SIN_TOTEM" | "ESPERANDO" | "ACTIVO" = "SIN_TOTEM"
+        if (totem?.activo) estado = "ACTIVO"
+        else if (totem?.codigoHash) estado = "ESPERANDO"
+
+        //true si el totem tiene un código que ya venció
+        const codigoVencido = !!totem?.codigoVenceEn && totem.codigoVenceEn < new Date()
+
+        return res.json({
+            estado,
+            codigoGeneradoEn: totem?.codigoGeneradoEn ?? null,
+            codigoVenceEn: totem?.codigoVenceEn ?? null,
+            codigoVencido,
+            activadoEn: totem?.activadoEn ?? null,
+        })
+    } catch (error) {
+        return res.status(500).json({ error: "Error interno del servidor" });
+    }
+    }

@@ -1,5 +1,5 @@
 import express from "express"
-import { actualizarHorarios, crearExcepcion, eliminarExcepcion, obtenerConfiguracion, crearFuncionario, listarFuncionarios, editarFuncionario, eliminarFuncionario, obtenerDatosLocal, actualizarDatosLocal, obtenerResumenInicio, obtenerEstadisticas } from '../controllers/adminController';
+import { actualizarHorarios, crearExcepcion, eliminarExcepcion, obtenerConfiguracion, crearFuncionario, listarFuncionarios, editarFuncionario, eliminarFuncionario, obtenerDatosLocal, actualizarDatosLocal, obtenerResumenInicio, obtenerEstadisticas, obtenerTotem } from '../controllers/adminController';
 import { verificarToken, verificarRol } from "../middlewares/authMiddleware";
 
 const router: express.Router = express.Router();
@@ -17,4 +17,5 @@ router.put("/local", verificarToken, verificarRol(["ADMIN"]), actualizarDatosLoc
 
 router.get("/inicio", verificarToken, verificarRol(["ADMIN"]), obtenerResumenInicio)
 router.get("/estadisticas", verificarToken, verificarRol(["ADMIN"]), obtenerEstadisticas)
+router.get("/totem", verificarToken, verificarRol(["ADMIN"]), obtenerTotem)
 export default router;
