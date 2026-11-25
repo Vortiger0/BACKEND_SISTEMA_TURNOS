@@ -2,8 +2,10 @@ import type {Request, Response} from "express";
 import {prisma} from "../prisma"
 import {z} from "zod";
 import bcrypt from "bcryptjs";
+import { generarCodigo, hashearCodigo } from "../utils/codigoTotem";
 
-
+//duracion del codigo del totem
+const VENCIMIENTO_CODIGO_MIN = 60
 
 
 //valida los datos del día individual dentro del array horarios, que día de la semana es, si atiende ese día y en qué horario
@@ -938,4 +940,53 @@ export const obtenerTotem = async (req: Request, res: Response) => {
     } catch (error) {
         return res.status(500).json({ error: "Error interno del servidor" });
     }
+    }
+
+export const generarCodigoTotem  = async (req: Request, res: Response) => {
+    const adminId = req.usuario?.id;
+
+    if (!adminId) {
+        return res.status(401).json({ error: "No autenticado" });
+    }
+
+    const admin = await prisma.admin.findUnique({
+        where: { id: adminId },
+    })
+
+    if (!admin) {
+        return res.status(404).json({ error: "Administrador no encontrado" });
+    }
+
+    try { 
+        //muestra el codigo claro para el admin, el hash para la base, la fecha actual y el momento del vencimiento del codigo
+        const codigo = generarCodigo();
+        const codigoHash = hashearCodigo(codigo);
+        const ahora = new Date();
+        const venceEn = new Date(ahora.getTime() + VENCIMIENTO_CODIGO_MIN * 60 * 1000);
+
+        //si la sucursal no tiene fila del totem la crea y de tenerla le hace update poniendo activo en false, activadoEn:null y suma 1 a la version
+        await prisma.totem.upsert({
+            where: { sucursalId: admin.sucursalId},
+            create: {
+                sucursalId: admin.sucursalId,
+                codigoHash,
+                codigoGeneradoEn: ahora,
+                codigoVenceEn: venceEn,
+                activo: false,
+                version: 1
+            },
+            update: {
+                codigoHash,
+                codigoGeneradoEn: ahora,
+                codigoVenceEn: venceEn,
+                activo: false,
+                activadoEn: null,
+                version: { increment: 1}
+            }
+        })
+        return res.status(201).json({ codigo, venceEn})
+    } catch (error) {
+        return res.status(500).json({error: "Error interno del servidor"})
+    }
+    
     }
