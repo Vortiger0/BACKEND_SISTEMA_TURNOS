@@ -990,3 +990,50 @@ export const generarCodigoTotem  = async (req: Request, res: Response) => {
     }
     
     }
+
+    export const cancelarCodigoTotem  = async (req: Request, res: Response) => {
+    const adminId = req.usuario?.id;
+
+    if (!adminId) {
+        return res.status(401).json({ error: "No autenticado" });
+    }
+
+    const admin = await prisma.admin.findUnique({
+        where: { id: adminId },
+    })
+
+    if (!admin) {
+        return res.status(404).json({ error: "Administrador no encontrado" });
+    }
+
+    try {
+        //intenta borrar el codigo pendiente si se cumplen las 3 condiciones
+        //que sea la sucursal del admin, que el totem no esté activado y que no haya un código guardado
+
+        const resultado = await prisma.totem.updateMany({
+            where: {
+                sucursalId: admin.sucursalId,
+                activo: false,
+                codigoHash: { not: null}
+            },
+            data: {
+                //borra el codigo y suma 1 a la versión
+                codigoHash: null,
+                codigoGeneradoEn: null,
+                codigoVenceEn: null,
+                version: { increment: 1}
+            }
+        })
+
+        
+        if ( resultado.count === 0 ) {
+            return res.status(409).json({ error: "No hay un código pendiente para cancelar"})
+        }
+
+        return res.status(200).json({ mensaje: "Código cancelado"})
+
+    } catch (error) {
+        return res.status(500).json({ error: "Error interno del servidor"})
+    }
+
+}
