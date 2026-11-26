@@ -16,7 +16,9 @@ export const sacarTurno = async (req: Request, res: Response ) => {
     if (!resultado.success){
         return res.status(400).json({ error: resultado.error.issues[0]?.message})
     }
-    const { sucursalId } = resultado.data;
+
+    //si el pedido viene del totem, usa la sucursal de su token, si viene de ciudadano usa la que mandó en el body
+    const sucursalId = req.totem?.sucursalId ?? resultado.data.sucursalId
 
     //busca una fila de sucursal con un id exacto, si se manda uno que no corresponde corta aquí
     const sucursal = await prisma.sucursal.findUnique({

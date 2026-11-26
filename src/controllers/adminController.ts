@@ -1,8 +1,9 @@
-import type {Request, Response} from "express";
+import type {NextFunction, Request, Response} from "express";
 import {prisma} from "../prisma"
 import {z} from "zod";
 import bcrypt from "bcryptjs";
 import { generarCodigo, hashearCodigo } from "../utils/codigoTotem";
+
 
 //duracion del codigo del totem
 const VENCIMIENTO_CODIGO_MIN = 60
@@ -1037,3 +1038,5 @@ export const generarCodigoTotem  = async (req: Request, res: Response) => {
     }
 
 }
+
+

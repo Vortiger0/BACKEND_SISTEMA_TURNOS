@@ -7,6 +7,7 @@ declare global {
         id: number;
         rol: string;
       };
+      totem?: { sucursalId: number}
     }
   }
 }
