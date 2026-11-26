@@ -1008,7 +1008,7 @@ export const generarCodigoTotem  = async (req: Request, res: Response) => {
 
     try {
         //intenta borrar el codigo pendiente si se cumplen las 3 condiciones
-        //que sea la sucursal del admin, que el totem no esté activado y que no haya un código guardado
+        //que sea la sucursal del admin, que el totem no esté activado y que haya un código guardado
 
         const resultado = await prisma.totem.updateMany({
             where: {

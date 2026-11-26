@@ -8,6 +8,7 @@ import funcionarioRoutes from "./routes/funcionarioRoutes"
 import adminRoutes from "./routes/adminRoute"
 import tvRoutes from "./routes/tvRoute"
 import pushRoutes from "./routes/pushRoutes"
+import totemRoutes from "./routes/totemRoute"
 
 const app: Express = express(); //
 
@@ -21,6 +22,7 @@ app.use("/api/funcionario", funcionarioRoutes)
 app.use("/api/admin", adminRoutes)
 app.use("/api/tv", tvRoutes)
 app.use("/api/push", pushRoutes)
+app.use("/api/totem", totemRoutes)
 
 app.get("/testeo", async (_req, res) => {
   const sucursales = await prisma.sucursal.count();
