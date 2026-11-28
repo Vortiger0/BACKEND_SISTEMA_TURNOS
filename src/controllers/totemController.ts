@@ -5,10 +5,9 @@ import { hashearCodigo } from "../utils/codigoTotem";
 import jwt from "jsonwebtoken";
 import { config } from "../config";
 
-//descripcion de la forma que debe tener el pedido al dispositivo, un numero de sucursal y un codigo en texto
+//descripcion de la forma que debe tener el pedido al dispositivo, un codigo en texto
 const esquemaActivacion = z.object({
-    sucursalId: z.number().int(),
-    codigo: z.string().max(20)
+    codigo: z.string().trim().min(1).max(20)
 })
 
 const DURACION_TOKEN_TOTEM = "365d"
@@ -20,26 +19,45 @@ export const activarTotem = async (req: Request, res: Response) => {
         return res.status(400).json({ error: "Datos inválidos" })
     }
 
-    const { sucursalId, codigo } = datos.data
+    const {  codigo } = datos.data
 
     const hash = hashearCodigo(codigo)
     const ahora = new Date()
 
-    //consume el codigo, si es correcto, no venció y no hay totem activo, lo activa y borra el codigo (porque es de un solo uso)
-    const resultado = await prisma.totem.updateMany({
-        where: {
-            sucursalId,
-            activo: false,
-            codigoHash: hash,
-            codigoVenceEn: { gt: ahora}
-        },
-        data: {
-            activo: true,
-            activadoEn: ahora,
-            codigoHash: null,
-            codigoGeneradoEn: null,
-            codigoVenceEn: null
+    
+
+    try{
+
+        //busca el totem que tiene ese codigo pendiente, sin vencer y sin dispositivo activo
+        const totemPendiente = await prisma.totem.findFirst({
+            where: {
+                activo: false,
+                codigoHash: hash,
+                codigoVenceEn: { gt: ahora}
+            }
+        })
+
+        if (!totemPendiente) {
+            return res.status(400).json({ error: "Código inválido o vencido"})
         }
+
+        
+
+    //consume el codigo, si es correcto, no venció y no hay totem activo, lo activa y borra el codigo (porque es de un solo uso)
+        const resultado = await prisma.totem.updateMany({
+            where: {
+                id: totemPendiente.id,
+                activo: false,
+                codigoHash: hash,
+                codigoVenceEn: { gt: ahora}
+            },
+            data: {
+                activo: true,
+                activadoEn: ahora,
+                codigoHash: null,
+                codigoGeneradoEn: null,
+                codigoVenceEn: null
+            }
 
         
     })
@@ -47,23 +65,16 @@ export const activarTotem = async (req: Request, res: Response) => {
     if (resultado.count === 0) {
             return res.status(400).json({ error: "Código inválido o vencido"})
         }
-
-    try{
-        //lee la fila para obtener la version actual, q va dentro del token
-        const totem = await prisma.totem.findUnique({ where: { sucursalId } })
-
-        if (!totem) {
-            return res.status(500).json({ error: "Error interno del servidor" })
-        }
+        
 
         //firma el token del tótem: lleva el rol, la sucursal y la version con la que se emitió
         const token = jwt.sign(
-            { rol: "TOTEM", sucursalId, version: totem.version },
+            { rol: "TOTEM", sucursalId: totemPendiente.sucursalId, version: totemPendiente.version},
             config.jwtSecret,
             { expiresIn: DURACION_TOKEN_TOTEM }
         )
 
-        return res.status(200).json({ token })
+        return res.status(200).json({ token, sucursalId: totemPendiente.sucursalId })
                 
     } catch (error) {
         return res.status(500).json({error: "Error interno del servidor"})
