@@ -116,3 +116,38 @@ export const verificarEmisor = async (req: Request, res: Response, next: NextFun
     return res.status(403).json({ error: "No tienes permiso para esta acción"})
     
 }
+
+//Comprueba que el totem exista, esté activo y la version del token coincida con la de la bd
+export const verificarTotem = async (req: Request, res: Response, next: NextFunction) => {
+    const header = req.headers.authorization
+    if (!header?.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "No autenticado" })
+    }
+    const token = header.split(" ")[1]
+
+    if (!token) {
+    return res.status(401).json({ error: "No autenticado" })
+    }
+
+    let payload: { rol: string; sucursalId?: number; version?: number }
+    try {
+        payload = jwt.verify(token, config.jwtSecret) as { rol: string; sucursalId?: number; version?: number }
+    } catch {
+        return res.status(401).json({ error: "Token inválido" })
+    }
+
+    if (payload.rol !== "TOTEM" || typeof payload.sucursalId !== "number") {
+        return res.status(403).json({ error: "No tienes permiso para esta acción"})
+    }
+
+    try {
+        const totem = await prisma.totem.findUnique({ where: { sucursalId: payload.sucursalId}})
+        if (!totem || !totem.activo || totem.version !== payload.version) {
+            return res.status(401).json({ error: "Totem no autorizado", codigo: "TOTEM_NO_AUTORIZADO"})
+        }
+        req.totem = { sucursalId: totem.sucursalId}
+        return next()
+    } catch {
+        return res.status(500).json({ error: "Error interno del servidor"})
+    }
+}
